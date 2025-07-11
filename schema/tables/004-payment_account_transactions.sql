@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS ledgerr.payment_account_transactions (
     entry_date DATE NOT NULL, -- Add this field to match the FK
     
     -- Transaction details
+    status VARCHAR(20) DEFAULT 'POSTED' CHECK (status IN ('POSTED', 'PENDING', 'FAILED', 'CANCELLED', 'EXPIRED')),
     amount DECIMAL(15,2) NOT NULL, -- Signed amount (+credit, -debit)
     running_balance DECIMAL(15,2) NOT NULL,
     transaction_type VARCHAR(20) NOT NULL CHECK (transaction_type IN ('TRANSFER', 'DEPOSIT', 'WITHDRAWAL', 'FEE', 'REVERSAL')),
@@ -16,6 +17,9 @@ CREATE TABLE IF NOT EXISTS ledgerr.payment_account_transactions (
     external_reference VARCHAR(50),
     payment_network VARCHAR(20),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    posted_at TIMESTAMP,
+    expires_at TIMESTAMP,
+    failure_reason TEXT,
 
     -- primary key
     PRIMARY KEY (partner_id, transaction_id),

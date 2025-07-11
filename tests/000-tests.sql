@@ -80,13 +80,11 @@ BEGIN
     );
     
     -- Verify balances using the balance function
-    SELECT current_balance INTO v_balance_record
+    SELECT current_balance INTO v_balance1
     FROM ledgerr.get_payment_account_balance(v_partner1_id, v_account1_id);
-    v_balance1 := v_balance_record.current_balance;
     
-    SELECT current_balance INTO v_balance_record
+    SELECT current_balance INTO v_balance2
     FROM ledgerr.get_payment_account_balance(v_partner2_id, v_account2_id);
-    v_balance2 := v_balance_record.current_balance;
     
     -- Assertions
     IF v_balance1 != 900.00 THEN
@@ -147,7 +145,7 @@ BEGIN
     
     -- Get initial balance
     SELECT current_balance INTO v_initial_balance
-    FROM ledgerr.payment_accounts WHERE partner_id = v_partner1_id;
+    FROM ledgerr.get_payment_account_balance(v_partner1_id, v_account1_id);
     
     -- Test DEPOSIT transaction (REMOVED EXPLICIT TRANSACTION MANAGEMENT)
     v_entry_id := ledgerr.execute_transaction(
@@ -171,7 +169,7 @@ BEGIN
     
     -- Verify final balance (initial + 200 - 50 = initial + 150)
     SELECT current_balance INTO v_final_balance
-    FROM ledgerr.payment_accounts WHERE partner_id = v_partner1_id;
+    FROM ledgerr.get_payment_account_balance(v_partner1_id, v_account1_id);
     
     IF v_final_balance != (v_initial_balance + 150.00) THEN
         RAISE EXCEPTION 'TEST 2 FAILED: Balance should be %, got %', 
@@ -253,7 +251,7 @@ BEGIN
     
     -- Verify balance unchanged
     SELECT current_balance INTO v_balance1_after
-    FROM ledgerr.payment_accounts WHERE partner_id = v_partner1_id;
+    FROM ledgerr.get_payment_account_balance(v_partner1_id, v_account1_id);
     
     IF v_balance1_after != v_balance1_before THEN
         RAISE EXCEPTION 'TEST 3 FAILED: Balance should be unchanged after failed transaction. Before: %, After: %', 
@@ -314,10 +312,10 @@ BEGIN
     
     -- Verify balances are back to original
     SELECT current_balance INTO v_balance1_after
-    FROM ledgerr.payment_accounts WHERE partner_id = v_partner1_id;
+    FROM ledgerr.get_payment_account_balance(v_partner1_id, v_account1_id);
     
     SELECT current_balance INTO v_balance2_after  
-    FROM ledgerr.payment_accounts WHERE partner_id = v_partner2_id;
+    FROM ledgerr.get_payment_account_balance(v_partner2_id, v_account2_id);
     
     IF v_balance1_after != v_balance1_before THEN
         RAISE EXCEPTION 'TEST 4 FAILED: Account 1 balance should be restored to %, got %', 
@@ -390,28 +388,136 @@ $$ LANGUAGE plpgsql;
 -- ============================================================================
 CREATE OR REPLACE FUNCTION ledgerr.run_all_tests()
 RETURNS void AS $$
+DECLARE
+    v_error_message TEXT;
+    v_error_detail TEXT;
+    v_error_hint TEXT;
+    v_error_context TEXT;
+    v_error_sqlstate TEXT;
+    v_test_name TEXT;
 BEGIN
     RAISE NOTICE '========================================';
-    RAISE NOTICE 'RUNNING UPDATED LEDGER UNIT TESTS';
+    RAISE NOTICE 'RUNNING LEDGER TESTS WITH FULL DEBUG';
     RAISE NOTICE '========================================';
     
     -- Setup test data
-    PERFORM ledgerr.setup_test_data();
+    BEGIN
+        v_test_name := 'SETUP';
+        RAISE NOTICE 'Running: %', v_test_name;
+        PERFORM ledgerr.setup_test_data();
+        RAISE NOTICE 'COMPLETED: %', v_test_name;
+    EXCEPTION
+        WHEN OTHERS THEN
+            GET STACKED DIAGNOSTICS
+                v_error_message = MESSAGE_TEXT,
+                v_error_detail = PG_EXCEPTION_DETAIL,
+                v_error_hint = PG_EXCEPTION_HINT,
+                v_error_context = PG_EXCEPTION_CONTEXT,
+                v_error_sqlstate = RETURNED_SQLSTATE;
+            
+            RAISE EXCEPTION E'FAILED IN: %\nERROR: %\nDETAIL: %\nHINT: %\nCONTEXT: %\nSQLSTATE: %',
+                v_test_name, v_error_message, v_error_detail, v_error_hint, v_error_context, v_error_sqlstate;
+    END;
     
-    -- Run tests
-    PERFORM ledgerr.test_basic_transfer();
-    PERFORM ledgerr.test_transaction_types();
-    PERFORM ledgerr.test_insufficient_funds();
-    PERFORM ledgerr.test_reversal();
-    PERFORM ledgerr.test_gl_balance_inquiry();
+    -- Test 1: Basic Transfer
+    BEGIN
+        v_test_name := 'TEST 1: Basic Transfer';
+        RAISE NOTICE 'Running: %', v_test_name;
+        PERFORM ledgerr.test_basic_transfer();
+        RAISE NOTICE 'COMPLETED: %', v_test_name;
+    EXCEPTION
+        WHEN OTHERS THEN
+            GET STACKED DIAGNOSTICS
+                v_error_message = MESSAGE_TEXT,
+                v_error_detail = PG_EXCEPTION_DETAIL,
+                v_error_hint = PG_EXCEPTION_HINT,
+                v_error_context = PG_EXCEPTION_CONTEXT,
+                v_error_sqlstate = RETURNED_SQLSTATE;
+            
+            RAISE EXCEPTION E'FAILED IN: %\nERROR: %\nDETAIL: %\nHINT: %\nCONTEXT: %\nSQLSTATE: %',
+                v_test_name, v_error_message, v_error_detail, v_error_hint, v_error_context, v_error_sqlstate;
+    END;
+    
+    -- Test 2: Transaction Types
+    BEGIN
+        v_test_name := 'TEST 2: Transaction Types';
+        RAISE NOTICE 'Running: %', v_test_name;
+        PERFORM ledgerr.test_transaction_types();
+        RAISE NOTICE 'COMPLETED: %', v_test_name;
+    EXCEPTION
+        WHEN OTHERS THEN
+            GET STACKED DIAGNOSTICS
+                v_error_message = MESSAGE_TEXT,
+                v_error_detail = PG_EXCEPTION_DETAIL,
+                v_error_hint = PG_EXCEPTION_HINT,
+                v_error_context = PG_EXCEPTION_CONTEXT,
+                v_error_sqlstate = RETURNED_SQLSTATE;
+            
+            RAISE EXCEPTION E'FAILED IN: %\nERROR: %\nDETAIL: %\nHINT: %\nCONTEXT: %\nSQLSTATE: %',
+                v_test_name, v_error_message, v_error_detail, v_error_hint, v_error_context, v_error_sqlstate;
+    END;
+    
+    -- Test 3: Insufficient Funds
+    BEGIN
+        v_test_name := 'TEST 3: Insufficient Funds';
+        RAISE NOTICE 'Running: %', v_test_name;
+        PERFORM ledgerr.test_insufficient_funds();
+        RAISE NOTICE 'COMPLETED: %', v_test_name;
+    EXCEPTION
+        WHEN OTHERS THEN
+            GET STACKED DIAGNOSTICS
+                v_error_message = MESSAGE_TEXT,
+                v_error_detail = PG_EXCEPTION_DETAIL,
+                v_error_hint = PG_EXCEPTION_HINT,
+                v_error_context = PG_EXCEPTION_CONTEXT,
+                v_error_sqlstate = RETURNED_SQLSTATE;
+            
+            RAISE EXCEPTION E'FAILED IN: %\nERROR: %\nDETAIL: %\nHINT: %\nCONTEXT: %\nSQLSTATE: %',
+                v_test_name, v_error_message, v_error_detail, v_error_hint, v_error_context, v_error_sqlstate;
+    END;
+    
+    -- Test 4: Reversal
+    BEGIN
+        v_test_name := 'TEST 4: Reversal';
+        RAISE NOTICE 'Running: %', v_test_name;
+        PERFORM ledgerr.test_reversal();
+        RAISE NOTICE 'COMPLETED: %', v_test_name;
+    EXCEPTION
+        WHEN OTHERS THEN
+            GET STACKED DIAGNOSTICS
+                v_error_message = MESSAGE_TEXT,
+                v_error_detail = PG_EXCEPTION_DETAIL,
+                v_error_hint = PG_EXCEPTION_HINT,
+                v_error_context = PG_EXCEPTION_CONTEXT,
+                v_error_sqlstate = RETURNED_SQLSTATE;
+            
+            RAISE EXCEPTION E'FAILED IN: %\nERROR: %\nDETAIL: %\nHINT: %\nCONTEXT: %\nSQLSTATE: %',
+                v_test_name, v_error_message, v_error_detail, v_error_hint, v_error_context, v_error_sqlstate;
+    END;
+    
+    -- Test 5: GL Balance
+    BEGIN
+        v_test_name := 'TEST 5: GL Balance';
+        RAISE NOTICE 'Running: %', v_test_name;
+        PERFORM ledgerr.test_gl_balance_inquiry();
+        RAISE NOTICE 'COMPLETED: %', v_test_name;
+    EXCEPTION
+        WHEN OTHERS THEN
+            GET STACKED DIAGNOSTICS
+                v_error_message = MESSAGE_TEXT,
+                v_error_detail = PG_EXCEPTION_DETAIL,
+                v_error_hint = PG_EXCEPTION_HINT,
+                v_error_context = PG_EXCEPTION_CONTEXT,
+                v_error_sqlstate = RETURNED_SQLSTATE;
+            
+            RAISE EXCEPTION E'FAILED IN: %\nERROR: %\nDETAIL: %\nHINT: %\nCONTEXT: %\nSQLSTATE: %',
+                v_test_name, v_error_message, v_error_detail, v_error_hint, v_error_context, v_error_sqlstate;
+    END;
     
     RAISE NOTICE '========================================';
     RAISE NOTICE 'ALL TESTS PASSED!';
     RAISE NOTICE '========================================';
     
-EXCEPTION
-    WHEN OTHERS THEN
-        RAISE EXCEPTION 'TEST SUITE FAILED: %', SQLERRM;
 END;
 $$ LANGUAGE plpgsql;
 
