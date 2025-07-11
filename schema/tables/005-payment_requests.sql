@@ -1,8 +1,8 @@
 CREATE TABLE IF NOT EXISTS ledgerr.payment_requests (
     idempotency_key VARCHAR(50) PRIMARY KEY,
     payment_id VARCHAR(50) UNIQUE,
-    from_account_id INTEGER REFERENCES ledgerr.payment_accounts(account_id),
-    to_account_id INTEGER REFERENCES ledgerr.payment_accounts(account_id),
+    from_account_id INTEGER REFERENCES ledgerr.payment_accounts(payment_account_id),
+    to_account_id INTEGER REFERENCES ledgerr.payment_accounts(payment_account_id),
     amount DECIMAL(15,2),
     payment_type VARCHAR(20),
     status VARCHAR(20) DEFAULT 'PENDING',
