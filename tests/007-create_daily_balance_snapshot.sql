@@ -1,6 +1,9 @@
 -- Unit test for create_daily_balance_snapshot function
 BEGIN;
 
+-- Set transaction isolation level to SERIALIZABLE for the test
+SET TRANSACTION ISOLATION LEVEL SERIALIZABLE;
+
 SAVEPOINT before_test;
 
 DO $$

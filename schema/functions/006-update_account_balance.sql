@@ -14,6 +14,7 @@ DECLARE
     v_new_balance DECIMAL(15,2);
     v_new_version INTEGER;
     v_daily_reset_needed BOOLEAN := FALSE;
+    v_isolation_level TEXT;
 BEGIN
     -- Require SERIALIZABLE isolation
     SELECT current_setting('transaction_isolation') INTO v_isolation_level;

@@ -14,6 +14,7 @@ DECLARE
     v_debit_amount DECIMAL(15,2);
     v_credit_amount DECIMAL(15,2);
     v_line_description TEXT;
+    v_isolation_level TEXT;
 BEGIN
     -- Require SERIALIZABLE isolation
     SELECT current_setting('transaction_isolation') INTO v_isolation_level;

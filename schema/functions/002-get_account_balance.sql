@@ -276,6 +276,7 @@ DECLARE
     v_cached_balance DECIMAL(15,2);
     v_is_current_date BOOLEAN;
     v_cache_insert_result TEXT;
+    v_isolation_level TEXT;
 BEGIN
     v_is_current_date := (p_as_of_date = CURRENT_DATE);
     

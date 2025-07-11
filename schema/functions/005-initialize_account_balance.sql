@@ -1,5 +1,7 @@
 CREATE OR REPLACE FUNCTION ledgerr.initialize_account_balance(p_account_id INTEGER)
 RETURNS VOID AS $$
+DECLARE
+    v_isolation_level TEXT;
 BEGIN
     -- Require SERIALIZABLE isolation
     SELECT current_setting('transaction_isolation') INTO v_isolation_level;
