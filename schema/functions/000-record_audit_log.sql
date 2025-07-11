@@ -1,4 +1,4 @@
-CREATE OR REPLACE FUNCTION ledgerr.track_table_changes()
+CREATE OR REPLACE FUNCTION ledgerr.record_audit_log()
 RETURNS TRIGGER AS $$
 DECLARE
     v_record_id TEXT;
@@ -7,13 +7,11 @@ DECLARE
 BEGIN
     -- Determine the primary key value dynamically
     CASE TG_TABLE_NAME
-        WHEN 'accounts' THEN v_record_id := COALESCE(NEW.account_id, OLD.account_id)::TEXT;
-        WHEN 'payment_accounts' THEN v_record_id := COALESCE(NEW.account_id, OLD.account_id)::TEXT;
-        WHEN 'account_balances' THEN v_record_id := COALESCE(NEW.account_id, OLD.account_id)::TEXT;
+        WHEN 'gl_accounts' THEN v_record_id := COALESCE(NEW.gl_account_id, OLD.gl_account_id)::TEXT;
+        WHEN 'payment_accounts' THEN v_record_id := COALESCE(NEW.payment_account_id, OLD.payment_account_id)::TEXT;
+        WHEN 'payment_account_transactions' THEN v_record_id := COALESCE(NEW.transaction_id, OLD.transaction_id)::TEXT;
         WHEN 'journal_entries' THEN v_record_id := COALESCE(NEW.entry_id, OLD.entry_id)::TEXT;
         WHEN 'journal_entry_lines' THEN v_record_id := COALESCE(NEW.line_id, OLD.line_id)::TEXT;
-        WHEN 'payment_requests' THEN v_record_id := COALESCE(NEW.idempotency_key, OLD.idempotency_key)::TEXT;
-        WHEN 'payment_status_log' THEN v_record_id := COALESCE(NEW.log_id, OLD.log_id)::TEXT;
         ELSE v_record_id := 'unknown';
     END CASE;
     
