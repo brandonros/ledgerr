@@ -1,4 +1,8 @@
 -- Unit test for record_journal_entry function (happy path)
+BEGIN;
+
+SAVEPOINT before_test;
+
 DO $$
 DECLARE
     v_entry_id INTEGER;
@@ -10,9 +14,6 @@ DECLARE
     v_asset_account_id INTEGER;
     v_cash_account_id INTEGER;
 BEGIN
-    -- Setup savepoint
-    SAVEPOINT test_start;
-
     -- Setup: Create test accounts if they don't exist
     INSERT INTO ledgerr.accounts (account_code, account_name, account_type, is_active)
     VALUES 
@@ -155,8 +156,8 @@ BEGIN
         v_equipment_balance DECIMAL(15,2);
         v_cash_balance DECIMAL(15,2);
     BEGIN
-        v_equipment_balance := ledgerr.get_account_balance(v_asset_account_id);
-        v_cash_balance := ledgerr.get_account_balance(v_cash_account_id);
+        v_equipment_balance := ledgerr.get_account_balance(v_asset_account_id, CURRENT_DATE, TRUE);
+        v_cash_balance := ledgerr.get_account_balance(v_cash_account_id, CURRENT_DATE, TRUE);
         
         RAISE NOTICE 'Equipment balance: %, Cash balance: %', v_equipment_balance, v_cash_balance;
         
@@ -167,12 +168,13 @@ BEGIN
     END;
     
     RAISE NOTICE '✓ TEST PASSED: record_journal_entry happy path - Entry ID: %', v_entry_id;
-
-    -- Rollback to the savepoint
-    ROLLBACK TO SAVEPOINT test_start;
 EXCEPTION
     WHEN OTHERS THEN
         RAISE NOTICE '✗ TEST FAILED: %', SQLERRM;
         RAISE;
 END;
 $$;
+
+ROLLBACK TO SAVEPOINT before_test;
+
+COMMIT;

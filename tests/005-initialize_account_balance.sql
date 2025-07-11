@@ -1,12 +1,13 @@
 -- Unit test for initialize_account_balance function (happy path)
+BEGIN;
+
+SAVEPOINT before_test;
+
 DO $$
 DECLARE
     v_test_account_id INTEGER;
     v_balance_record RECORD;
 BEGIN
-    -- Setup savepoint for cleanup
-    SAVEPOINT test_start;
-    
     RAISE NOTICE 'Starting test: initialize_account_balance happy path';
     
     -- Setup: Create test account
@@ -63,14 +64,14 @@ BEGIN
     END IF;
     
     RAISE NOTICE '✓ TEST PASSED: initialize_account_balance happy path - Account ID: %', v_test_account_id;
-    
-    -- Cleanup
-    ROLLBACK TO SAVEPOINT test_start;
-    
 EXCEPTION
     WHEN OTHERS THEN
         RAISE NOTICE '✗ TEST FAILED: %', SQLERRM;
-        ROLLBACK TO SAVEPOINT test_start;
         RAISE;
 END;
 $$;
+
+ROLLBACK TO SAVEPOINT before_test;
+
+COMMIT;
+

@@ -1,4 +1,8 @@
 -- Unit test for process_payment function (happy path)
+BEGIN;
+
+SAVEPOINT before_test;
+
 DO $$
 DECLARE
     v_from_payment_account_id INTEGER;
@@ -9,9 +13,6 @@ DECLARE
     v_journal_lines JSONB;
     v_entry_id INTEGER;
 BEGIN
-    -- Setup savepoint for cleanup
-    SAVEPOINT test_start;
-    
     RAISE NOTICE 'Starting test: process_payment happy path';
     
     -- Setup: Create ledger accounts first
@@ -110,14 +111,13 @@ BEGIN
     END IF;
     
     RAISE NOTICE '✓ TEST PASSED: process_payment happy path';
-    
-    -- Cleanup
-    ROLLBACK TO SAVEPOINT test_start;
-    
 EXCEPTION
     WHEN OTHERS THEN
         RAISE NOTICE '✗ TEST FAILED: %', SQLERRM;
-        ROLLBACK TO SAVEPOINT test_start;
         RAISE;
 END;
 $$;
+
+ROLLBACK TO SAVEPOINT before_test;
+
+COMMIT;

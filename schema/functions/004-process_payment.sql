@@ -108,7 +108,7 @@ BEGIN
     END IF;
     
     -- Check available balance
-    IF get_account_balance(v_from_payment_account.account_id) < p_amount THEN
+    IF ledgerr.get_account_balance(v_from_payment_account.account_id, CURRENT_DATE, TRUE) < p_amount THEN
         UPDATE payment_requests 
         SET status = 'FAILED', 
             response_data = jsonb_build_object('error_message', 'Insufficient funds'),

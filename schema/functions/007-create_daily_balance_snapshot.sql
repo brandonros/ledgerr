@@ -32,11 +32,11 @@ BEGIN
         
         -- If no previous snapshot, calculate from beginning
         IF v_opening_balance IS NULL THEN
-            v_opening_balance := get_account_balance(v_account.account_id, p_snapshot_date - INTERVAL '1 day');
+            v_opening_balance := ledgerr.get_account_balance(v_account.account_id, p_snapshot_date - INTERVAL '1 day', TRUE);
         END IF;
         
         -- Get closing balance
-        v_closing_balance := get_account_balance(v_account.account_id, p_snapshot_date);
+        v_closing_balance := ledgerr.get_account_balance(v_account.account_id, p_snapshot_date, TRUE);
         
         -- Get daily activity
         SELECT 

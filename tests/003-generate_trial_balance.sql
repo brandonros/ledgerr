@@ -1,4 +1,8 @@
 -- Unit test for generate_trial_balance function (happy path)
+BEGIN;
+
+SAVEPOINT before_test;
+
 DO $$
 DECLARE
     v_asset_account_id INTEGER;
@@ -8,9 +12,6 @@ DECLARE
     v_journal_lines JSONB;
     v_trial_record RECORD;
 BEGIN
-    -- Setup savepoint for cleanup
-    SAVEPOINT test_start;
-    
     RAISE NOTICE 'Starting test: generate_trial_balance happy path';
     
     -- Setup: Create test accounts
@@ -74,14 +75,14 @@ BEGIN
     END IF;
     
     RAISE NOTICE '✓ TEST PASSED: generate_trial_balance happy path';
-    
-    -- Cleanup
-    ROLLBACK TO SAVEPOINT test_start;
-    
 EXCEPTION
     WHEN OTHERS THEN
         RAISE NOTICE '✗ TEST FAILED: %', SQLERRM;
-        ROLLBACK TO SAVEPOINT test_start;
         RAISE;
 END;
 $$;
+
+ROLLBACK TO SAVEPOINT before_test;
+
+COMMIT;
+
