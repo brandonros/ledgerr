@@ -10,6 +10,9 @@ DECLARE
     v_asset_account_id INTEGER;
     v_cash_account_id INTEGER;
 BEGIN
+    -- Setup savepoint
+    SAVEPOINT test_start;
+
     -- Setup: Create test accounts if they don't exist
     INSERT INTO ledgerr.accounts (account_code, account_name, account_type, is_active)
     VALUES 
@@ -163,12 +166,10 @@ BEGIN
         END IF;
     END;
     
-    -- Cleanup: Remove test entry (optional - you might want to keep for inspection)
-    -- DELETE FROM ledgerr.journal_entry_lines WHERE entry_id = v_entry_id;
-    -- DELETE FROM ledgerr.journal_entries WHERE entry_id = v_entry_id;
-    
     RAISE NOTICE '✓ TEST PASSED: record_journal_entry happy path - Entry ID: %', v_entry_id;
-    
+
+    -- Rollback to the savepoint
+    ROLLBACK TO SAVEPOINT test_start;
 EXCEPTION
     WHEN OTHERS THEN
         RAISE NOTICE '✗ TEST FAILED: %', SQLERRM;
