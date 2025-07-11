@@ -8,6 +8,8 @@ DECLARE
     v_account_type VARCHAR(20);
     v_last_updated TIMESTAMP;
     v_is_current_date BOOLEAN;
+    v_snapshot_balance DECIMAL(15,2);
+    v_latest_snapshot_date DATE;
 BEGIN
     -- Get account type and validate account exists
     SELECT account_type INTO v_account_type
@@ -34,7 +36,52 @@ BEGIN
         END IF;
     END IF;
     
-    -- Calculate balance based on account type
+    -- For historical dates or when cache miss, try snapshot optimization
+    IF NOT v_is_current_date THEN
+        -- Try to find exact snapshot first
+        SELECT closing_balance INTO v_snapshot_balance
+        FROM ledgerr.daily_balance_snapshots 
+        WHERE account_id = p_account_id 
+          AND snapshot_date = p_as_of_date;
+        
+        IF v_snapshot_balance IS NOT NULL THEN
+            RETURN v_snapshot_balance;
+        END IF;
+        
+        -- Find latest snapshot before the requested date
+        SELECT snapshot_date, closing_balance 
+        INTO v_latest_snapshot_date, v_snapshot_balance
+        FROM ledgerr.daily_balance_snapshots 
+        WHERE account_id = p_account_id 
+          AND snapshot_date < p_as_of_date
+        ORDER BY snapshot_date DESC 
+        LIMIT 1;
+        
+        -- If we have a snapshot, calculate incrementally from that point
+        IF v_latest_snapshot_date IS NOT NULL THEN
+            SELECT 
+                v_snapshot_balance + 
+                CASE 
+                    WHEN v_account_type IN ('ASSET', 'EXPENSE') THEN
+                        COALESCE(SUM(jel.debit_amount - jel.credit_amount), 0)
+                    ELSE
+                        COALESCE(SUM(jel.credit_amount - jel.debit_amount), 0)
+                END
+            INTO v_balance
+            FROM ledgerr.journal_entry_lines jel
+            JOIN ledgerr.journal_entries je ON jel.entry_id = je.entry_id
+            WHERE jel.account_id = p_account_id
+              AND je.entry_date > v_latest_snapshot_date
+              AND je.entry_date <= p_as_of_date
+              AND je.is_posted = TRUE;
+            
+            -- Return the calculated balance (v_snapshot_balance if no transactions since snapshot)
+            v_balance := COALESCE(v_balance, v_snapshot_balance);
+            RETURN v_balance;
+        END IF;
+    END IF;
+    
+    -- Fallback: Calculate balance from scratch based on account type
     SELECT 
         CASE 
             WHEN v_account_type IN ('ASSET', 'EXPENSE') THEN
