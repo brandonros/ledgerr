@@ -1,6 +1,6 @@
 -- Cache management function
 CREATE OR REPLACE FUNCTION ledgerr.get_cached_balance(
-    p_account_id INTEGER
+    p_account_id UUID
 ) RETURNS DECIMAL(15,2) AS $$
 DECLARE
     v_cached_balance DECIMAL(15,2);

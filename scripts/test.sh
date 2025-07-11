@@ -1,8 +1,10 @@
 #!/bin/bash
 
-set -e
+set -euo pipefail
 
-find "./tests" -name "*.sql" -type f | sort -V | while read -r file; do
+files=$(find "./tests" -name "*.sql" -type f | sort -V)
+
+for file in $files; do
     echo "Executing: $file"
-    cat "$file" | psql "$DATABASE_URL"
+    psql -v ON_ERROR_STOP=1 "$DATABASE_URL" < "$file"
 done

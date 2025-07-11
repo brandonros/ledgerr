@@ -1,5 +1,5 @@
 CREATE OR REPLACE FUNCTION ledgerr.update_account_balance(
-    p_account_id INTEGER,
+    p_account_id UUID,
     p_debit_amount DECIMAL(15,2) DEFAULT 0.00,
     p_credit_amount DECIMAL(15,2) DEFAULT 0.00,
     p_expected_version INTEGER DEFAULT NULL

@@ -1,6 +1,6 @@
 -- Optimized function: Try snapshot first, fall back to calculation
 CREATE OR REPLACE FUNCTION ledgerr.get_balance_with_snapshot_optimization(
-    p_account_id INTEGER,
+    p_account_id UUID,
     p_as_of_date DATE DEFAULT CURRENT_DATE
 ) RETURNS DECIMAL(15,2) AS $$
 DECLARE

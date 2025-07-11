@@ -8,14 +8,14 @@ SAVEPOINT before_test;
 
 DO $$
 DECLARE
-    v_entry_id INTEGER;
+    v_entry_id UUID;
     v_journal_lines JSONB;
     v_total_entries INTEGER;
     v_total_lines INTEGER;
     v_entry_record RECORD;
     v_line_record RECORD;
-    v_asset_account_id INTEGER;
-    v_cash_account_id INTEGER;
+    v_asset_account_id UUID;
+    v_cash_account_id UUID;
 BEGIN
     -- Setup: Create test accounts if they don't exist
     INSERT INTO ledgerr.accounts (account_code, account_name, account_type, is_active)

@@ -1,6 +1,6 @@
 -- Main public function: Simple and reliable
 CREATE OR REPLACE FUNCTION ledgerr.get_account_balance(
-    p_account_id INTEGER,
+    p_account_id UUID,
     p_as_of_date DATE DEFAULT CURRENT_DATE,
     p_use_cache BOOLEAN DEFAULT TRUE
 ) RETURNS DECIMAL(15,2) AS $$

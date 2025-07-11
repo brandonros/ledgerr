@@ -17,7 +17,3 @@ CREATE TABLE IF NOT EXISTS ledgerr.payment_accounts (
 ) PARTITION BY HASH (external_account_id);
 
 CREATE INDEX IF NOT EXISTS idx_payment_accounts_external_active ON ledgerr.payment_accounts (external_account_id) WHERE is_active = true;
-
--- TODO: gl_asset_account_id BIGINT NOT NULL REFERENCES ledgerr.accounts(account_id),
--- TODO: gl_liability_account_id BIGINT NOT NULL REFERENCES ledgerr.accounts(account_id),
-    

@@ -4,13 +4,13 @@ CREATE OR REPLACE FUNCTION ledgerr.record_journal_entry(
     p_journal_lines JSONB,
     p_reference_number VARCHAR(50) DEFAULT NULL,
     p_created_by VARCHAR(50) DEFAULT 'system'
-) RETURNS INTEGER AS $$
+) RETURNS UUID AS $$
 DECLARE
-    v_entry_id INTEGER;
+    v_entry_id UUID;
     v_total_debits DECIMAL(15,2) := 0;
     v_total_credits DECIMAL(15,2) := 0;
     v_line JSONB;
-    v_account_id INTEGER;
+    v_account_id UUID;
     v_debit_amount DECIMAL(15,2);
     v_credit_amount DECIMAL(15,2);
     v_line_description TEXT;
@@ -44,7 +44,7 @@ BEGIN
     FOR v_line IN SELECT * FROM jsonb_array_elements(p_journal_lines)
     LOOP
         -- Extract values from JSON
-        v_account_id := (v_line->>'account_id')::INTEGER;
+        v_account_id := (v_line->>'account_id')::UUID;
         v_debit_amount := COALESCE((v_line->>'debit_amount')::DECIMAL(15,2), 0);
         v_credit_amount := COALESCE((v_line->>'credit_amount')::DECIMAL(15,2), 0);
         v_line_description := v_line->>'description';
@@ -60,8 +60,8 @@ BEGIN
         END IF;
         
         -- Insert journal entry line
-        INSERT INTO ledgerr.journal_entry_lines (entry_id, account_id, debit_amount, credit_amount, description)
-        VALUES (v_entry_id, v_account_id, v_debit_amount, v_credit_amount, v_line_description);
+        INSERT INTO ledgerr.journal_entry_lines (entry_id, entry_date, account_id, debit_amount, credit_amount, description)
+        VALUES (v_entry_id, p_entry_date, v_account_id, v_debit_amount, v_credit_amount, v_line_description);
         
         -- Add to totals
         v_total_debits := v_total_debits + v_debit_amount;

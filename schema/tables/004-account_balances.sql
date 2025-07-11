@@ -1,5 +1,5 @@
 CREATE TABLE IF NOT EXISTS ledgerr.account_balances (
-    account_id INTEGER,
+    account_id UUID,
     current_balance DECIMAL(15,2) DEFAULT 0.00,
     available_balance DECIMAL(15,2) DEFAULT 0.00,
     pending_debits DECIMAL(15,2) DEFAULT 0.00,
@@ -9,7 +9,8 @@ CREATE TABLE IF NOT EXISTS ledgerr.account_balances (
     daily_debit_total DECIMAL(15,2) DEFAULT 0.00,
     daily_credit_total DECIMAL(15,2) DEFAULT 0.00,
     last_daily_reset DATE DEFAULT CURRENT_DATE,
-    PRIMARY KEY (account_id)
+    PRIMARY KEY (account_id),
+    CONSTRAINT fk_account_balances_accounts FOREIGN KEY (account_id) REFERENCES ledgerr.accounts(account_id)
 ) PARTITION BY HASH (account_id);
 
 -- Unique constraint to prevent duplicate account balances

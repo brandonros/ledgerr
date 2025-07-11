@@ -4,6 +4,7 @@ set -euo pipefail
 
 # Define directories in order
 DIRECTORIES=(
+    "extensions"
     "schemas"
     "tables" 
     "functions"

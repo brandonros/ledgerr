@@ -1,5 +1,5 @@
 CREATE OR REPLACE FUNCTION ledgerr.calculate_balance_from_journal(
-    p_account_id INTEGER,
+    p_account_id UUID,
     p_as_of_date DATE DEFAULT CURRENT_DATE
 ) RETURNS DECIMAL(15,2) AS $$
 DECLARE
