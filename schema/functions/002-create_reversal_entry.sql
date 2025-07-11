@@ -8,6 +8,8 @@ DECLARE
     v_reversal_entry_id UUID;
     v_original_entry RECORD;
     v_line RECORD;
+    v_transaction RECORD;
+    v_reversal_line_id UUID;
 BEGIN
     -- Get the original entry
     SELECT * INTO v_original_entry
@@ -40,7 +42,7 @@ BEGIN
         p_original_entry_id,
         p_original_entry_date,
         p_reversal_reason,
-        false
+        true  -- Mark as posted immediately
     );
     
     -- Create reversal lines (flip debits and credits)
@@ -69,7 +71,29 @@ BEGIN
             v_line.settlement_date,
             v_line.external_reference,
             -v_line.processing_fee  -- Reverse the fee
-        );
+        ) RETURNING line_id INTO v_reversal_line_id;
+        
+        -- CRITICAL FIX: Create corresponding payment account transactions for the reversal
+        -- Find the original payment account transaction for this journal line
+        FOR v_transaction IN
+            SELECT * FROM ledgerr.payment_account_transactions
+            WHERE journal_entry_id = p_original_entry_id 
+              AND journal_line_id = v_line.line_id
+              AND entry_date = p_original_entry_date
+        LOOP
+            -- Create the reversal payment account transaction (flip the amount)
+            PERFORM ledgerr.create_payment_account_transaction(
+                v_transaction.partner_id,
+                v_transaction.payment_account_id,
+                -v_transaction.amount,  -- Flip the amount to reverse it
+                'REVERSAL',
+                v_reversal_entry_id,
+                v_reversal_line_id,
+                CURRENT_DATE,
+                'REVERSAL: ' || v_transaction.description,
+                'REV-' || COALESCE(v_transaction.external_reference, '')
+            );
+        END LOOP;
     END LOOP;
     
     -- Mark original entry as reversed

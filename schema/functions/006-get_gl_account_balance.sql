@@ -11,11 +11,11 @@ CREATE OR REPLACE FUNCTION ledgerr.get_gl_account_balance(
 BEGIN
     RETURN QUERY
     SELECT 
-        COALESCE(SUM(debit_amount - credit_amount), 0) as account_balance,
-        COALESCE(SUM(debit_amount), 0) as total_debits,
-        COALESCE(SUM(credit_amount), 0) as total_credits,
+        COALESCE(SUM(jel.debit_amount - jel.credit_amount), 0) as account_balance,
+        COALESCE(SUM(jel.debit_amount), 0) as total_debits,
+        COALESCE(SUM(jel.credit_amount), 0) as total_credits,
         COUNT(*) as transaction_count,
-        MAX(entry_date) as last_activity_date
+        MAX(jel.entry_date) as last_activity_date
     FROM ledgerr.journal_entry_lines jel
     JOIN ledgerr.journal_entries je ON jel.entry_id = je.entry_id AND jel.entry_date = je.entry_date
     WHERE jel.gl_account_id = p_gl_account_id 

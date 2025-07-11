@@ -10,7 +10,10 @@ CREATE TABLE IF NOT EXISTS ledgerr.payment_account_transactions (
     status VARCHAR(20) DEFAULT 'POSTED' CHECK (status IN ('POSTED', 'PENDING', 'FAILED', 'CANCELLED', 'EXPIRED')),
     amount DECIMAL(15,2) NOT NULL, -- Signed amount (+credit, -debit)
     running_balance DECIMAL(15,2) NOT NULL,
-    transaction_type VARCHAR(20) NOT NULL CHECK (transaction_type IN ('TRANSFER', 'DEPOSIT', 'WITHDRAWAL', 'FEE', 'REVERSAL')),
+    transaction_type VARCHAR(20) NOT NULL CHECK (transaction_type IN (
+        'TRANSFER', 'DEPOSIT', 'WITHDRAWAL', 'FEE', 'REVERSAL',
+        'PURCHASE', 'REFUND', 'ADJUSTMENT', 'PAYMENT'
+    )),
     
     -- References and metadata
     description TEXT,
