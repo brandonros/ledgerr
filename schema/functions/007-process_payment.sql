@@ -52,9 +52,9 @@ BEGIN
     WHERE external_account_id = p_from_external_account_id AND is_active = TRUE
     FOR UPDATE;
     
-    IF v_from_payment_account.account_id IS NULL THEN
+    IF v_from_payment_account.payment_account_id IS NULL THEN
         INSERT INTO ledgerr.payment_requests (
-            idempotency_key, payment_id, from_account_id, to_account_id, 
+            idempotency_key, payment_id, from_payment_account_id, to_payment_account_id, 
             amount, payment_type, status, response_data, processed_at
         ) VALUES (
             p_idempotency_key, p_payment_id, NULL, NULL,
@@ -73,12 +73,12 @@ BEGIN
     WHERE external_account_id = p_to_external_account_id AND is_active = TRUE
     FOR UPDATE;
     
-    IF v_to_payment_account.account_id IS NULL THEN
+    IF v_to_payment_account.payment_account_id IS NULL THEN
         INSERT INTO ledgerr.payment_requests (
-            idempotency_key, payment_id, from_account_id, to_account_id, 
+            idempotency_key, payment_id, from_payment_account_id, to_payment_account_id, 
             amount, payment_type, status, response_data, processed_at
         ) VALUES (
-            p_idempotency_key, p_payment_id, v_from_payment_account.account_id, NULL,
+            p_idempotency_key, p_payment_id, v_from_payment_account.payment_account_id, NULL,
             p_amount, p_payment_type, 'FAILED', 
             jsonb_build_object('error_message', 'Destination account not found'),
             CURRENT_TIMESTAMP
@@ -91,10 +91,10 @@ BEGIN
     
     -- Insert payment request for tracking with proper account_ids
     INSERT INTO ledgerr.payment_requests (
-        idempotency_key, payment_id, from_account_id, to_account_id, 
+        idempotency_key, payment_id, from_payment_account_id, to_payment_account_id, 
         amount, payment_type, status
     ) VALUES (
-        p_idempotency_key, p_payment_id, v_from_payment_account.account_id, v_to_payment_account.account_id,
+        p_idempotency_key, p_payment_id, v_from_payment_account.payment_account_id, v_to_payment_account.payment_account_id,
         p_amount, p_payment_type, 'PROCESSING'
     );
     
@@ -112,7 +112,7 @@ BEGIN
     END IF;
     
     -- Check available balance
-    IF ledgerr.get_account_balance(v_from_payment_account.account_id, CURRENT_DATE, TRUE) < p_amount THEN
+    IF ledgerr.get_account_balance(v_from_payment_account.payment_account_id, CURRENT_DATE, TRUE) < p_amount THEN
         UPDATE ledgerr.payment_requests 
         SET status = 'FAILED', 
             response_data = jsonb_build_object('error_message', 'Insufficient funds'),
@@ -127,7 +127,7 @@ BEGIN
     -- Check daily limits
     SELECT COALESCE(daily_debit_total, 0) INTO v_daily_total
     FROM ledgerr.account_balances 
-    WHERE account_id = v_from_payment_account.account_id;
+    WHERE account_id = v_from_payment_account.payment_account_id;
     
     IF (v_daily_total + p_amount) > v_from_payment_account.daily_limit THEN
         UPDATE ledgerr.payment_requests 
@@ -144,7 +144,7 @@ BEGIN
     -- Build journal entry
     v_journal_lines := jsonb_build_array(
         jsonb_build_object(
-            'account_id', v_from_payment_account.account_id,
+            'account_id', v_from_payment_account.gl_liability_account_id,
             'credit_amount', p_amount,
             'description', format('Payment to %s', p_to_external_account_id),
             'external_account_id', p_from_external_account_id,
@@ -152,7 +152,7 @@ BEGIN
             'payment_type', p_payment_type
         ),
         jsonb_build_object(
-            'account_id', v_to_payment_account.account_id,
+            'account_id', v_to_payment_account.gl_asset_account_id,
             'debit_amount', p_amount,
             'description', format('Payment from %s', p_from_external_account_id),
             'external_account_id', p_to_external_account_id,
@@ -173,14 +173,14 @@ BEGIN
     -- Update balances atomically
     SELECT * INTO v_from_balance_result
     FROM ledgerr.update_account_balance(
-        v_from_payment_account.account_id,
+        v_from_payment_account.payment_account_id,
         p_amount,  -- debit amount
         0.00       -- credit amount
     );
     
     SELECT * INTO v_to_balance_result
     FROM ledgerr.update_account_balance(
-        v_to_payment_account.account_id,
+        v_to_payment_account.payment_account_id,
         0.00,      -- debit amount
         p_amount   -- credit amount
     );

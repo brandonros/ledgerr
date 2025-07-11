@@ -1,7 +1,8 @@
 CREATE TABLE IF NOT EXISTS ledgerr.journal_entry_lines (
-    line_id SERIAL,
-    entry_id INTEGER NOT NULL REFERENCES ledgerr.journal_entries(entry_id),
-    account_id INTEGER NOT NULL REFERENCES ledgerr.accounts(account_id),
+    line_id UUID DEFAULT uuid_generate_v4(),
+    entry_date DATE NOT NULL,
+    entry_id UUID NOT NULL,
+    account_id UUID NOT NULL REFERENCES ledgerr.accounts(account_id),
     debit_amount DECIMAL(15,2) DEFAULT 0.00,
     credit_amount DECIMAL(15,2) DEFAULT 0.00,
     description TEXT,
@@ -14,12 +15,13 @@ CREATE TABLE IF NOT EXISTS ledgerr.journal_entry_lines (
     external_reference VARCHAR(100),
     processing_fee DECIMAL(15,2) DEFAULT 0.00,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (line_id, created_at),
+    PRIMARY KEY (line_id, entry_date),
     CONSTRAINT valid_amount CHECK (
         (debit_amount > 0 AND credit_amount = 0) OR 
         (credit_amount > 0 AND debit_amount = 0)
-    )
-) PARTITION BY RANGE (created_at);
+    ),
+    CONSTRAINT fk_journal_entry_lines_journal_entries FOREIGN KEY (entry_id, entry_date) REFERENCES ledgerr.journal_entries(entry_id, entry_date)
+) PARTITION BY RANGE (entry_date);
 
 CREATE INDEX IF NOT EXISTS idx_journal_entry_lines_payment_id ON ledgerr.journal_entry_lines(payment_id);
 CREATE INDEX IF NOT EXISTS idx_journal_entry_lines_external_account ON ledgerr.journal_entry_lines(external_account_id);

@@ -1,11 +1,13 @@
 CREATE TABLE IF NOT EXISTS ledgerr.journal_entries (
-    entry_id SERIAL PRIMARY KEY,
+    entry_id UUID DEFAULT uuid_generate_v4(),
     entry_date DATE NOT NULL,
     description TEXT NOT NULL,
     reference_number VARCHAR(50),
     created_by VARCHAR(50),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    is_posted BOOLEAN DEFAULT FALSE
+    is_posted BOOLEAN DEFAULT FALSE,
+
+    PRIMARY KEY (entry_id, entry_date)
 ) PARTITION BY RANGE (entry_date);
 
 CREATE INDEX IF NOT EXISTS idx_journal_entries_date_posted ON ledgerr.journal_entries(entry_date, is_posted);

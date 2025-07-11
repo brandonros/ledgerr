@@ -1,10 +1,10 @@
 CREATE TABLE IF NOT EXISTS ledgerr.payment_accounts (
-    payment_account_id SERIAL,
+    payment_account_id UUID DEFAULT uuid_generate_v4(),
     external_account_id VARCHAR(50) UNIQUE NOT NULL,
     account_holder_name VARCHAR(100) NOT NULL,
     account_type VARCHAR(20) NOT NULL CHECK (account_type IN ('CHECKING', 'SAVINGS', 'PREPAID', 'MERCHANT')),
-    gl_asset_account_id INTEGER NOT NULL REFERENCES ledgerr.accounts(account_id),
-    gl_liability_account_id INTEGER NOT NULL REFERENCES ledgerr.accounts(account_id),
+    gl_asset_account_id UUID NOT NULL REFERENCES ledgerr.accounts(account_id),
+    gl_liability_account_id UUID NOT NULL REFERENCES ledgerr.accounts(account_id),
     daily_limit DECIMAL(15,2) DEFAULT 5000.00,
     monthly_limit DECIMAL(15,2) DEFAULT 50000.00,
     is_active BOOLEAN DEFAULT TRUE,

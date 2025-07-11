@@ -1,6 +1,6 @@
 CREATE TABLE IF NOT EXISTS ledgerr.daily_balance_snapshots (
     snapshot_date DATE NOT NULL,
-    account_id INTEGER NOT NULL REFERENCES ledgerr.accounts(account_id),
+    account_id UUID NOT NULL REFERENCES ledgerr.accounts(account_id),
     opening_balance DECIMAL(15,2) NOT NULL,
     closing_balance DECIMAL(15,2) NOT NULL,
     total_debits DECIMAL(15,2) DEFAULT 0.00,
