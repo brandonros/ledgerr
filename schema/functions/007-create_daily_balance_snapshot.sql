@@ -1,4 +1,4 @@
-CREATE OR REPLACE FUNCTION create_daily_balance_snapshot(p_snapshot_date DATE DEFAULT CURRENT_DATE - INTERVAL '1 day')
+CREATE OR REPLACE FUNCTION ledgerr.create_daily_balance_snapshot(p_snapshot_date DATE DEFAULT CURRENT_DATE - INTERVAL '1 day')
 RETURNS TABLE (
     accounts_processed INTEGER,
     total_time_ms INTEGER
@@ -15,7 +15,6 @@ DECLARE
 BEGIN
     -- Check if snapshot already exists
     IF EXISTS (SELECT 1 FROM ledgerr.daily_balance_snapshots WHERE snapshot_date = p_snapshot_date LIMIT 1) THEN
-        RAISE NOTICE 'Snapshot for % already exists, skipping', p_snapshot_date;
         RETURN QUERY SELECT 0, 0;
         RETURN;
     END IF;
@@ -44,8 +43,8 @@ BEGIN
             COALESCE(SUM(jel.credit_amount), 0),
             COUNT(*)
         INTO v_total_debits, v_total_credits, v_transaction_count
-        FROM journal_entry_lines jel
-        JOIN journal_entries je ON jel.entry_id = je.entry_id
+        FROM ledgerr.journal_entry_lines jel
+        JOIN ledgerr.journal_entries je ON jel.entry_id = je.entry_id
         WHERE jel.account_id = v_account.account_id
           AND je.entry_date = p_snapshot_date
           AND je.is_posted = TRUE;
