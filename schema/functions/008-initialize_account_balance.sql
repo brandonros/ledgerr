@@ -1,4 +1,4 @@
-CREATE OR REPLACE FUNCTION ledgerr.initialize_account_balance(p_account_id INTEGER)
+CREATE OR REPLACE FUNCTION ledgerr.initialize_account_balance(p_account_id UUID)
 RETURNS VOID AS $$
 DECLARE
     v_isolation_level TEXT;

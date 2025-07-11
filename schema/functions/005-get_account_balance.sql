@@ -81,7 +81,7 @@ $$ LANGUAGE plpgsql;
 
 -- Overload function to accept TIMESTAMP and convert to DATE
 CREATE OR REPLACE FUNCTION ledgerr.get_account_balance(
-    p_account_id INTEGER,
+    p_account_id UUID,
     p_as_of_timestamp TIMESTAMP,
     p_use_cache BOOLEAN DEFAULT TRUE
 ) RETURNS DECIMAL(15,2) AS $$

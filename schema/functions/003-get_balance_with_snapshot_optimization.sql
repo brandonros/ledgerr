@@ -23,7 +23,7 @@ BEGIN
         v_account_type, (v_account_type IS NOT NULL);
     
     IF v_account_type IS NULL THEN
-        RAISE EXCEPTION 'Account ID % does not exist or is inactive', p_account_id;
+        RAISE EXCEPTION 'Account ID % does not exist or is inactive 3', p_account_id;
     END IF;
     
     -- For current date, skip snapshot optimization

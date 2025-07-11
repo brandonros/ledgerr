@@ -1,5 +1,5 @@
 CREATE OR REPLACE FUNCTION ledgerr.process_payment(
-    p_idempotency_key VARCHAR(50),
+    p_idempotency_key UUID,
     p_payment_id VARCHAR(50),
     p_from_external_account_id VARCHAR(50),
     p_to_external_account_id VARCHAR(50),
@@ -18,7 +18,7 @@ CREATE OR REPLACE FUNCTION ledgerr.process_payment(
 DECLARE
     v_start_time TIMESTAMP := CURRENT_TIMESTAMP;
     v_isolation_level TEXT;
-    v_entry_id INTEGER;
+    v_entry_id UUID;
     v_from_payment_account ledgerr.payment_accounts%ROWTYPE;
     v_to_payment_account ledgerr.payment_accounts%ROWTYPE;
     v_from_balance_result RECORD;
@@ -55,11 +55,12 @@ BEGIN
     IF v_from_payment_account.payment_account_id IS NULL THEN
         INSERT INTO ledgerr.payment_requests (
             idempotency_key, payment_id, from_payment_account_id, to_payment_account_id, 
-            amount, payment_type, status, response_data, processed_at
+            amount, payment_type, status, response_data, entry_date, processed_at
         ) VALUES (
             p_idempotency_key, p_payment_id, NULL, NULL,
             p_amount, p_payment_type, 'FAILED', 
             jsonb_build_object('error_message', 'Source account not found'),
+            CURRENT_DATE,
             CURRENT_TIMESTAMP
         );
         
@@ -76,11 +77,12 @@ BEGIN
     IF v_to_payment_account.payment_account_id IS NULL THEN
         INSERT INTO ledgerr.payment_requests (
             idempotency_key, payment_id, from_payment_account_id, to_payment_account_id, 
-            amount, payment_type, status, response_data, processed_at
+            amount, payment_type, status, response_data, entry_date, processed_at
         ) VALUES (
             p_idempotency_key, p_payment_id, v_from_payment_account.payment_account_id, NULL,
             p_amount, p_payment_type, 'FAILED', 
             jsonb_build_object('error_message', 'Destination account not found'),
+            CURRENT_DATE,
             CURRENT_TIMESTAMP
         );
         
@@ -92,10 +94,10 @@ BEGIN
     -- Insert payment request for tracking with proper account_ids
     INSERT INTO ledgerr.payment_requests (
         idempotency_key, payment_id, from_payment_account_id, to_payment_account_id, 
-        amount, payment_type, status
+        amount, payment_type, status, entry_date
     ) VALUES (
         p_idempotency_key, p_payment_id, v_from_payment_account.payment_account_id, v_to_payment_account.payment_account_id,
-        p_amount, p_payment_type, 'PROCESSING'
+        p_amount, p_payment_type, 'PROCESSING', CURRENT_DATE
     );
     
     -- Validation checks
@@ -103,6 +105,7 @@ BEGIN
         UPDATE ledgerr.payment_requests 
         SET status = 'FAILED', 
             response_data = jsonb_build_object('error_message', 'Amount must be positive'),
+            entry_date = CURRENT_DATE,
             processed_at = CURRENT_TIMESTAMP
         WHERE idempotency_key = p_idempotency_key;
         
@@ -112,10 +115,11 @@ BEGIN
     END IF;
     
     -- Check available balance
-    IF ledgerr.get_account_balance(v_from_payment_account.payment_account_id, CURRENT_DATE, TRUE) < p_amount THEN
+    IF ledgerr.get_account_balance(v_from_payment_account.gl_liability_account_id, CURRENT_DATE, TRUE) < p_amount THEN
         UPDATE ledgerr.payment_requests 
         SET status = 'FAILED', 
             response_data = jsonb_build_object('error_message', 'Insufficient funds'),
+            entry_date = CURRENT_DATE,
             processed_at = CURRENT_TIMESTAMP
         WHERE idempotency_key = p_idempotency_key;
         
@@ -127,12 +131,13 @@ BEGIN
     -- Check daily limits
     SELECT COALESCE(daily_debit_total, 0) INTO v_daily_total
     FROM ledgerr.account_balances 
-    WHERE account_id = v_from_payment_account.payment_account_id;
+    WHERE account_id = v_from_payment_account.gl_liability_account_id;
     
     IF (v_daily_total + p_amount) > v_from_payment_account.daily_limit THEN
         UPDATE ledgerr.payment_requests 
         SET status = 'FAILED', 
             response_data = jsonb_build_object('error_message', 'Daily limit exceeded'),
+            entry_date = CURRENT_DATE,
             processed_at = CURRENT_TIMESTAMP
         WHERE idempotency_key = p_idempotency_key;
         
@@ -170,17 +175,17 @@ BEGIN
         'payment_system'
     ) INTO v_entry_id;
     
-    -- Update balances atomically
+    -- Update balances atomically 
     SELECT * INTO v_from_balance_result
     FROM ledgerr.update_account_balance(
-        v_from_payment_account.payment_account_id,
+        v_from_payment_account.gl_liability_account_id,
         p_amount,  -- debit amount
         0.00       -- credit amount
     );
     
     SELECT * INTO v_to_balance_result
     FROM ledgerr.update_account_balance(
-        v_to_payment_account.payment_account_id,
+        v_to_payment_account.gl_asset_account_id,
         0.00,      -- debit amount
         p_amount   -- credit amount
     );
@@ -205,6 +210,7 @@ BEGIN
             'to_balance', v_to_balance_result.new_balance,
             'processing_time_ms', v_processing_time_ms
         ),
+        entry_date = CURRENT_DATE,
         processed_at = CURRENT_TIMESTAMP
     WHERE idempotency_key = p_idempotency_key;
     
@@ -226,6 +232,7 @@ EXCEPTION
         UPDATE ledgerr.payment_requests 
         SET status = 'FAILED', 
             response_data = jsonb_build_object('error_message', SQLERRM),
+            entry_date = CURRENT_DATE,
             processed_at = CURRENT_TIMESTAMP
         WHERE idempotency_key = p_idempotency_key;
         

@@ -20,7 +20,7 @@ BEGIN
         v_account_type, (v_account_type IS NOT NULL);
     
     IF v_account_type IS NULL THEN
-        RAISE EXCEPTION 'Account ID % does not exist or is inactive', p_account_id;
+        RAISE EXCEPTION 'Account ID % does not exist or is inactive 2', p_account_id;
     END IF;
     
     -- Count journal entries for debugging

@@ -8,9 +8,9 @@ SAVEPOINT before_test;
 
 DO $$
 DECLARE
-    v_asset_account_id INTEGER;
-    v_liability_account_id INTEGER;
-    v_entry_id INTEGER;
+    v_asset_account_id UUID;
+    v_liability_account_id UUID;
+    v_entry_id UUID;
     v_trial_balance_count INTEGER;
     v_journal_lines JSONB;
     v_trial_record RECORD;

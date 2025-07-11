@@ -8,17 +8,21 @@ SAVEPOINT before_test;
 
 DO $$
 DECLARE
-    v_from_payment_account_id INTEGER;
-    v_to_payment_account_id INTEGER;
-    v_from_asset_account_id INTEGER;
-    v_from_liability_account_id INTEGER;
-    v_to_asset_account_id INTEGER;
-    v_to_liability_account_id INTEGER;
+    v_from_payment_account_id UUID;
+    v_to_payment_account_id UUID;
+    v_from_asset_account_id UUID;
+    v_from_liability_account_id UUID;
+    v_to_asset_account_id UUID;
+    v_to_liability_account_id UUID;
     v_payment_result RECORD;
     v_journal_lines JSONB;
-    v_entry_id INTEGER;
+    v_entry_id UUID;
+    v_idempotency_key UUID;
 BEGIN
     RAISE NOTICE 'Starting test: process_payment happy path';
+
+    -- Generate a random UUID for idempotency_key
+    v_idempotency_key := uuid_generate_v4();
 
     -- Create ledger accounts
     INSERT INTO ledgerr.accounts (account_code, account_name, account_type, is_active)
@@ -76,7 +80,7 @@ BEGIN
     -- Test 1: Process a successful payment
     SELECT * INTO v_payment_result
     FROM ledgerr.process_payment(
-        'TEST-PAY-001',           -- idempotency_key
+        v_idempotency_key,           -- idempotency_key
         'PAY-12345',              -- payment_id
         'EXT-PAY-001',            -- from_external_account_id
         'EXT-PAY-002',            -- to_external_account_id
@@ -107,7 +111,7 @@ BEGIN
     -- Test 3: Test idempotency (same request should return same result)
     SELECT * INTO v_payment_result
     FROM ledgerr.process_payment(
-        'TEST-PAY-001',           -- same idempotency_key
+        v_idempotency_key,           -- same idempotency_key
         'PAY-12345',              
         'EXT-PAY-001',            
         'EXT-PAY-002',            
@@ -124,7 +128,7 @@ BEGIN
     -- Test 4: Verify payment request was logged
     IF NOT EXISTS (
         SELECT 1 FROM ledgerr.payment_requests 
-        WHERE idempotency_key = 'TEST-PAY-001' 
+        WHERE idempotency_key = v_idempotency_key 
           AND payment_id = 'PAY-12345'
           AND status = 'SUCCESS'
     ) THEN

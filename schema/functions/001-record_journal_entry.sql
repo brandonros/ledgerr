@@ -51,7 +51,7 @@ BEGIN
         
         -- Validate account exists
         IF NOT EXISTS (SELECT 1 FROM ledgerr.accounts WHERE account_id = v_account_id AND is_active = TRUE) THEN
-            RAISE EXCEPTION 'Account ID % does not exist or is inactive', v_account_id;
+            RAISE EXCEPTION 'Account ID % does not exist or is inactive 1', v_account_id;
         END IF;
         
         -- Validate that exactly one of debit or credit is provided
