@@ -8,14 +8,14 @@ SAVEPOINT before_test;
 
 DO $$
 DECLARE
-    v_account_id_1 INTEGER;
-    v_account_id_2 INTEGER;
+    v_account_id_1 UUID;
+    v_account_id_2 UUID;
     v_test_date DATE := '2025-07-08'::DATE;
     v_previous_date DATE := '2025-07-07'::DATE;
     v_result RECORD;
     v_snapshot_count INTEGER;
     v_journal_lines JSONB;
-    v_entry_id INTEGER;
+    v_entry_id UUID;
 BEGIN
     RAISE NOTICE 'Starting test: create_daily_balance_snapshot';
     

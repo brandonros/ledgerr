@@ -8,7 +8,7 @@ SAVEPOINT before_test;
 
 DO $$
 DECLARE
-    v_test_account_id INTEGER;
+    v_test_account_id UUID;
     v_update_result RECORD;
     v_balance_record RECORD;
 BEGIN

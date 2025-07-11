@@ -9,7 +9,7 @@ CREATE OR REPLACE FUNCTION ledgerr.process_payment(
     p_payment_network VARCHAR(20) DEFAULT 'INTERNAL'
 ) RETURNS TABLE (
     status VARCHAR(20),
-    transaction_id INTEGER,
+    transaction_id UUID,
     error_message TEXT,
     from_balance DECIMAL(15,2),
     to_balance DECIMAL(15,2),
@@ -228,6 +228,8 @@ BEGIN
         
 EXCEPTION
     WHEN OTHERS THEN
+        RAISE NOTICE 'Exception: %', SQLERRM;
+
         -- Update payment request with error
         UPDATE ledgerr.payment_requests 
         SET status = 'FAILED', 
