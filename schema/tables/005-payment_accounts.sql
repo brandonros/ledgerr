@@ -1,7 +1,7 @@
 CREATE TABLE IF NOT EXISTS ledgerr.payment_accounts (
     payment_account_id UUID DEFAULT uuid_generate_v4(),
     external_account_id VARCHAR(50) NOT NULL,
-    partner_id UUID NOT NULL,
+    partner_id UUID NOT NULL REFERENCES ledgerr.partners(partner_id),
     
     -- Account details
     account_holder_name VARCHAR(100) NOT NULL,

@@ -1,6 +1,6 @@
 CREATE TABLE IF NOT EXISTS ledgerr.payment_account_transactions (
     transaction_id UUID DEFAULT uuid_generate_v4(),
-    partner_id UUID, -- TODO: Add partner table
+    partner_id UUID REFERENCES ledgerr.partners(partner_id),
     payment_account_id UUID,
     journal_entry_id UUID NOT NULL,
     journal_line_id UUID NOT NULL,

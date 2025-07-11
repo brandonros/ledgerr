@@ -14,8 +14,15 @@ BEGIN
     DELETE FROM ledgerr.payment_accounts WHERE partner_id IN (v_partner1_id, v_partner2_id, v_bank_partner_id);
     DELETE FROM ledgerr.journal_entry_lines WHERE entry_date = CURRENT_DATE;
     DELETE FROM ledgerr.journal_entries WHERE entry_date = CURRENT_DATE;
-    -- Use shorter account codes that fit in VARCHAR(10)
     DELETE FROM ledgerr.gl_accounts WHERE account_code IN ('TST_ASSET', 'TST_LIAB', 'TST_SETTLE');
+    DELETE FROM ledgerr.partners WHERE partner_id IN (v_partner1_id, v_partner2_id, v_bank_partner_id);
+    
+    -- Create test partners first
+    INSERT INTO ledgerr.partners (partner_id, partner_name, partner_type, external_partner_id, is_active)
+    VALUES 
+        (v_partner1_id, 'Test User 1', 'INDIVIDUAL', 'TEST_USER_001', true),
+        (v_partner2_id, 'Test User 2', 'INDIVIDUAL', 'TEST_USER_002', true),
+        (v_bank_partner_id, 'Test Bank Settlement', 'BANK', 'TEST_BANK_001', true);
     
     -- Create test GL accounts with shorter codes
     INSERT INTO ledgerr.gl_accounts (account_code, account_name, account_type)
@@ -400,107 +407,37 @@ BEGIN
     RAISE NOTICE 'RUNNING LEDGER TESTS WITH FULL DEBUG';
     RAISE NOTICE '========================================';
     
-    -- Setup test data
     BEGIN
         v_test_name := 'SETUP';
         RAISE NOTICE 'Running: %', v_test_name;
         PERFORM ledgerr.setup_test_data();
         RAISE NOTICE 'COMPLETED: %', v_test_name;
-    EXCEPTION
-        WHEN OTHERS THEN
-            GET STACKED DIAGNOSTICS
-                v_error_message = MESSAGE_TEXT,
-                v_error_detail = PG_EXCEPTION_DETAIL,
-                v_error_hint = PG_EXCEPTION_HINT,
-                v_error_context = PG_EXCEPTION_CONTEXT,
-                v_error_sqlstate = RETURNED_SQLSTATE;
-            
-            RAISE EXCEPTION E'FAILED IN: %\nERROR: %\nDETAIL: %\nHINT: %\nCONTEXT: %\nSQLSTATE: %',
-                v_test_name, v_error_message, v_error_detail, v_error_hint, v_error_context, v_error_sqlstate;
-    END;
-    
-    -- Test 1: Basic Transfer
-    BEGIN
+
         v_test_name := 'TEST 1: Basic Transfer';
         RAISE NOTICE 'Running: %', v_test_name;
         PERFORM ledgerr.test_basic_transfer();
         RAISE NOTICE 'COMPLETED: %', v_test_name;
-    EXCEPTION
-        WHEN OTHERS THEN
-            GET STACKED DIAGNOSTICS
-                v_error_message = MESSAGE_TEXT,
-                v_error_detail = PG_EXCEPTION_DETAIL,
-                v_error_hint = PG_EXCEPTION_HINT,
-                v_error_context = PG_EXCEPTION_CONTEXT,
-                v_error_sqlstate = RETURNED_SQLSTATE;
-            
-            RAISE EXCEPTION E'FAILED IN: %\nERROR: %\nDETAIL: %\nHINT: %\nCONTEXT: %\nSQLSTATE: %',
-                v_test_name, v_error_message, v_error_detail, v_error_hint, v_error_context, v_error_sqlstate;
-    END;
-    
-    -- Test 2: Transaction Types
-    BEGIN
+
         v_test_name := 'TEST 2: Transaction Types';
         RAISE NOTICE 'Running: %', v_test_name;
         PERFORM ledgerr.test_transaction_types();
         RAISE NOTICE 'COMPLETED: %', v_test_name;
-    EXCEPTION
-        WHEN OTHERS THEN
-            GET STACKED DIAGNOSTICS
-                v_error_message = MESSAGE_TEXT,
-                v_error_detail = PG_EXCEPTION_DETAIL,
-                v_error_hint = PG_EXCEPTION_HINT,
-                v_error_context = PG_EXCEPTION_CONTEXT,
-                v_error_sqlstate = RETURNED_SQLSTATE;
-            
-            RAISE EXCEPTION E'FAILED IN: %\nERROR: %\nDETAIL: %\nHINT: %\nCONTEXT: %\nSQLSTATE: %',
-                v_test_name, v_error_message, v_error_detail, v_error_hint, v_error_context, v_error_sqlstate;
-    END;
-    
-    -- Test 3: Insufficient Funds
-    BEGIN
+
         v_test_name := 'TEST 3: Insufficient Funds';
         RAISE NOTICE 'Running: %', v_test_name;
         PERFORM ledgerr.test_insufficient_funds();
         RAISE NOTICE 'COMPLETED: %', v_test_name;
-    EXCEPTION
-        WHEN OTHERS THEN
-            GET STACKED DIAGNOSTICS
-                v_error_message = MESSAGE_TEXT,
-                v_error_detail = PG_EXCEPTION_DETAIL,
-                v_error_hint = PG_EXCEPTION_HINT,
-                v_error_context = PG_EXCEPTION_CONTEXT,
-                v_error_sqlstate = RETURNED_SQLSTATE;
-            
-            RAISE EXCEPTION E'FAILED IN: %\nERROR: %\nDETAIL: %\nHINT: %\nCONTEXT: %\nSQLSTATE: %',
-                v_test_name, v_error_message, v_error_detail, v_error_hint, v_error_context, v_error_sqlstate;
-    END;
-    
-    -- Test 4: Reversal
-    BEGIN
+
         v_test_name := 'TEST 4: Reversal';
         RAISE NOTICE 'Running: %', v_test_name;
         PERFORM ledgerr.test_reversal();
         RAISE NOTICE 'COMPLETED: %', v_test_name;
-    EXCEPTION
-        WHEN OTHERS THEN
-            GET STACKED DIAGNOSTICS
-                v_error_message = MESSAGE_TEXT,
-                v_error_detail = PG_EXCEPTION_DETAIL,
-                v_error_hint = PG_EXCEPTION_HINT,
-                v_error_context = PG_EXCEPTION_CONTEXT,
-                v_error_sqlstate = RETURNED_SQLSTATE;
-            
-            RAISE EXCEPTION E'FAILED IN: %\nERROR: %\nDETAIL: %\nHINT: %\nCONTEXT: %\nSQLSTATE: %',
-                v_test_name, v_error_message, v_error_detail, v_error_hint, v_error_context, v_error_sqlstate;
-    END;
-    
-    -- Test 5: GL Balance
-    BEGIN
+
         v_test_name := 'TEST 5: GL Balance';
         RAISE NOTICE 'Running: %', v_test_name;
         PERFORM ledgerr.test_gl_balance_inquiry();
         RAISE NOTICE 'COMPLETED: %', v_test_name;
+
     EXCEPTION
         WHEN OTHERS THEN
             GET STACKED DIAGNOSTICS
@@ -518,67 +455,6 @@ BEGIN
     RAISE NOTICE 'ALL TESTS PASSED!';
     RAISE NOTICE '========================================';
     
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE OR REPLACE FUNCTION ledgerr.test_basic_transfer_debug()
-RETURNS void AS $$
-DECLARE
-    v_partner1_id UUID := '11111111-1111-1111-1111-111111111111';
-    v_partner2_id UUID := '22222222-2222-2222-2222-222222222222';
-    v_account1_id UUID;
-    v_account2_id UUID;
-    v_entry_id UUID;
-    v_balance1 DECIMAL(15,2);
-    v_balance2 DECIMAL(15,2);
-BEGIN
-    RAISE NOTICE 'Starting DEBUG TEST: Basic Transfer';
-    
-    -- Get account IDs
-    SELECT payment_account_id INTO v_account1_id 
-    FROM ledgerr.payment_accounts WHERE partner_id = v_partner1_id;
-    
-    SELECT payment_account_id INTO v_account2_id
-    FROM ledgerr.payment_accounts WHERE partner_id = v_partner2_id;
-    
-    RAISE NOTICE 'Account 1 ID: %', v_account1_id;
-    RAISE NOTICE 'Account 2 ID: %', v_account2_id;
-    
-    -- Check if accounts exist
-    IF v_account1_id IS NULL THEN
-        RAISE EXCEPTION 'Account 1 not found for partner %', v_partner1_id;
-    END IF;
-    
-    IF v_account2_id IS NULL THEN
-        RAISE EXCEPTION 'Account 2 not found for partner %', v_partner2_id;
-    END IF;
-    
-    -- Execute transfer with debug info
-    BEGIN
-        RAISE NOTICE 'About to execute transaction...';
-        
-        v_entry_id := ledgerr.execute_transaction(
-            v_partner1_id, v_account1_id,
-            v_partner2_id, v_account2_id, 
-            100.00,
-            'TRANSFER',
-            'Test transfer between accounts',
-            'TEST_REF_001'
-        );
-        
-        RAISE NOTICE 'Transaction executed. Entry ID: %', v_entry_id;
-        
-        -- Check if entry_id is NULL
-        IF v_entry_id IS NULL THEN
-            RAISE EXCEPTION 'execute_transaction returned NULL entry_id';
-        END IF;
-        
-    EXCEPTION
-        WHEN OTHERS THEN
-            RAISE EXCEPTION 'Transfer failed: %', SQLERRM;
-    END;
-    
-    RAISE NOTICE 'DEBUG TEST completed successfully';
 END;
 $$ LANGUAGE plpgsql;
 
