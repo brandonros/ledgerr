@@ -1,19 +1,36 @@
 CREATE TABLE IF NOT EXISTS ledgerr.payment_accounts (
-    payment_account_id UUID DEFAULT uuid_generate_v4(),
+    payment_account_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     external_account_id VARCHAR(50) UNIQUE NOT NULL,
+    partner_id UUID NOT NULL, -- TODO: Add partner table
+    
+    -- Account details
     account_holder_name VARCHAR(100) NOT NULL,
     account_type VARCHAR(20) NOT NULL CHECK (account_type IN ('CHECKING', 'SAVINGS', 'PREPAID', 'MERCHANT')),
-    gl_asset_account_id UUID NOT NULL REFERENCES ledgerr.accounts(account_id),
-    gl_liability_account_id UUID NOT NULL REFERENCES ledgerr.accounts(account_id),
+    gl_account_id UUID NOT NULL REFERENCES ledgerr.gl_accounts(gl_account_id),
+    
+    -- Embedded balance (performance optimization)
+    current_balance DECIMAL(15,2) DEFAULT 0.00,
+    available_balance DECIMAL(15,2) DEFAULT 0.00,
+    pending_debits DECIMAL(15,2) DEFAULT 0.00,
+    pending_credits DECIMAL(15,2) DEFAULT 0.00,
+    
+    -- Daily limits and tracking
     daily_limit DECIMAL(15,2) DEFAULT 5000.00,
     monthly_limit DECIMAL(15,2) DEFAULT 50000.00,
+    daily_debit_total DECIMAL(15,2) DEFAULT 0.00,
+    daily_credit_total DECIMAL(15,2) DEFAULT 0.00,
+    last_daily_reset DATE DEFAULT CURRENT_DATE,
+    
+    -- Operational fields
     is_active BOOLEAN DEFAULT TRUE,
     risk_level VARCHAR(10) DEFAULT 'LOW' CHECK (risk_level IN ('LOW', 'MEDIUM', 'HIGH')),
     last_transaction_at TIMESTAMP,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    version INTEGER DEFAULT 1,
+    balance_version INTEGER DEFAULT 1, -- Optimistic locking
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) PARTITION BY HASH (partner_id);
 
-    PRIMARY KEY (external_account_id, payment_account_id)
-) PARTITION BY HASH (external_account_id);
+CREATE INDEX IF NOT EXISTS idx_payment_accounts_external_active 
+ON ledgerr.payment_accounts (external_account_id) WHERE is_active = true;
 
-CREATE INDEX IF NOT EXISTS idx_payment_accounts_external_active ON ledgerr.payment_accounts (external_account_id) WHERE is_active = true;
+CREATE INDEX IF NOT EXISTS idx_payment_accounts_partner_active 
+ON ledgerr.payment_accounts (partner_id) WHERE is_active = true;

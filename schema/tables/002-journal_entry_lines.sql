@@ -2,7 +2,7 @@ CREATE TABLE IF NOT EXISTS ledgerr.journal_entry_lines (
     line_id UUID DEFAULT uuid_generate_v4(),
     entry_date DATE NOT NULL,
     entry_id UUID NOT NULL,
-    account_id UUID NOT NULL REFERENCES ledgerr.accounts(account_id),
+    gl_account_id UUID NOT NULL REFERENCES ledgerr.gl_accounts(gl_account_id),
     debit_amount DECIMAL(15,2) DEFAULT 0.00,
     credit_amount DECIMAL(15,2) DEFAULT 0.00,
     description TEXT,
