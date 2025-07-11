@@ -1,4 +1,4 @@
-CREATE OR REPLACE FUNCTION process_payment(
+CREATE OR REPLACE FUNCTION ledgerr.process_payment(
     p_idempotency_key VARCHAR(50),
     p_payment_id VARCHAR(50),
     p_from_external_account_id VARCHAR(50),
@@ -18,8 +18,8 @@ CREATE OR REPLACE FUNCTION process_payment(
 DECLARE
     v_start_time TIMESTAMP := CURRENT_TIMESTAMP;
     v_entry_id INTEGER;
-    v_from_payment_account payment_accounts%ROWTYPE;
-    v_to_payment_account payment_accounts%ROWTYPE;
+    v_from_payment_account ledgerr.payment_accounts%ROWTYPE;
+    v_to_payment_account ledgerr.payment_accounts%ROWTYPE;
     v_from_balance_result RECORD;
     v_to_balance_result RECORD;
     v_daily_total DECIMAL(15,2);
@@ -44,7 +44,7 @@ BEGIN
     
     -- Get and lock payment accounts by external_account_id
     SELECT * INTO v_from_payment_account
-    FROM payment_accounts 
+    FROM ledgerr.payment_accounts 
     WHERE external_account_id = p_from_external_account_id AND is_active = TRUE
     FOR UPDATE;
     
@@ -65,7 +65,7 @@ BEGIN
     END IF;
     
     SELECT * INTO v_to_payment_account
-    FROM payment_accounts 
+    FROM ledgerr.payment_accounts 
     WHERE external_account_id = p_to_external_account_id AND is_active = TRUE
     FOR UPDATE;
     

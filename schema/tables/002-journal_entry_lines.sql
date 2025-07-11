@@ -1,7 +1,7 @@
-CREATE TABLE IF NOT EXISTS journal_entry_lines (
+CREATE TABLE IF NOT EXISTS ledgerr.journal_entry_lines (
     line_id SERIAL,
-    entry_id INTEGER NOT NULL REFERENCES journal_entries(entry_id),
-    account_id INTEGER NOT NULL REFERENCES accounts(account_id),
+    entry_id INTEGER NOT NULL REFERENCES ledgerr.journal_entries(entry_id),
+    account_id INTEGER NOT NULL REFERENCES ledgerr.accounts(account_id),
     debit_amount DECIMAL(15,2) DEFAULT 0.00,
     credit_amount DECIMAL(15,2) DEFAULT 0.00,
     description TEXT,
@@ -21,5 +21,5 @@ CREATE TABLE IF NOT EXISTS journal_entry_lines (
     )
 ) PARTITION BY RANGE (created_at);
 
-CREATE INDEX IF NOT EXISTS idx_journal_entry_lines_payment_id ON journal_entry_lines(payment_id);
-CREATE INDEX IF NOT EXISTS idx_journal_entry_lines_external_account ON journal_entry_lines(external_account_id);
+CREATE INDEX IF NOT EXISTS idx_journal_entry_lines_payment_id ON ledgerr.journal_entry_lines(payment_id);
+CREATE INDEX IF NOT EXISTS idx_journal_entry_lines_external_account ON ledgerr.journal_entry_lines(external_account_id);

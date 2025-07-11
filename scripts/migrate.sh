@@ -4,6 +4,7 @@ set -e
 
 # Define directories in order
 DIRECTORIES=(
+    "schemas"
     "tables" 
     "functions"
     "triggers"

@@ -1,4 +1,4 @@
-CREATE OR REPLACE FUNCTION update_account_balance(
+CREATE OR REPLACE FUNCTION ledgerr.update_account_balance(
     p_account_id INTEGER,
     p_debit_amount DECIMAL(15,2) DEFAULT 0.00,
     p_credit_amount DECIMAL(15,2) DEFAULT 0.00,

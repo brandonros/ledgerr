@@ -1,4 +1,4 @@
-CREATE OR REPLACE FUNCTION record_journal_entry(
+CREATE OR REPLACE FUNCTION ledgerr.record_journal_entry(
     p_entry_date DATE,
     p_description TEXT,
     p_journal_lines JSONB,
@@ -29,7 +29,7 @@ BEGIN
     END IF;
     
     -- Create the journal entry header
-    INSERT INTO journal_entries (entry_date, description, reference_number, created_by)
+    INSERT INTO ledgerr.journal_entries (entry_date, description, reference_number, created_by)
     VALUES (p_entry_date, p_description, p_reference_number, p_created_by)
     RETURNING entry_id INTO v_entry_id;
     
@@ -53,7 +53,7 @@ BEGIN
         END IF;
         
         -- Insert journal entry line
-        INSERT INTO journal_entry_lines (entry_id, account_id, debit_amount, credit_amount, description)
+        INSERT INTO ledgerr.journal_entry_lines (entry_id, account_id, debit_amount, credit_amount, description)
         VALUES (v_entry_id, v_account_id, v_debit_amount, v_credit_amount, v_line_description);
         
         -- Add to totals
@@ -68,7 +68,7 @@ BEGIN
     END IF;
     
     -- Mark the entry as posted
-    UPDATE journal_entries 
+    UPDATE ledgerr.journal_entries 
     SET is_posted = TRUE 
     WHERE entry_id = v_entry_id;
     

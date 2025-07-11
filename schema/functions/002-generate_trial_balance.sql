@@ -1,4 +1,4 @@
-CREATE OR REPLACE FUNCTION generate_trial_balance(p_as_of_date DATE DEFAULT CURRENT_DATE)
+CREATE OR REPLACE FUNCTION ledgerr.generate_trial_balance(p_as_of_date DATE DEFAULT CURRENT_DATE)
 RETURNS TABLE (
     account_code VARCHAR(10),
     account_name VARCHAR(100),

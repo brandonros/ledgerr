@@ -1,4 +1,4 @@
-CREATE OR REPLACE FUNCTION initialize_account_balance(p_account_id INTEGER)
+CREATE OR REPLACE FUNCTION ledgerr.initialize_account_balance(p_account_id INTEGER)
 RETURNS VOID AS $$
 BEGIN
     INSERT INTO account_balances (account_id, current_balance, available_balance)

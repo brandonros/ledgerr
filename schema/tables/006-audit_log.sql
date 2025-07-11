@@ -1,4 +1,4 @@
-CREATE TABLE IF NOT EXISTS audit_log (
+CREATE TABLE IF NOT EXISTS ledgerr.audit_log (
     log_id SERIAL,
     event_type VARCHAR(50) NOT NULL,
     table_name VARCHAR(50) NOT NULL,
@@ -13,5 +13,5 @@ CREATE TABLE IF NOT EXISTS audit_log (
     PRIMARY KEY (log_id, changed_at)
 ) PARTITION BY RANGE (changed_at);
 
-CREATE INDEX IF NOT EXISTS idx_audit_log_table_record ON audit_log(table_name, record_id);
-CREATE INDEX IF NOT EXISTS idx_audit_log_timestamp ON audit_log(changed_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_log_table_record ON ledgerr.audit_log(table_name, record_id);
+CREATE INDEX IF NOT EXISTS idx_audit_log_timestamp ON ledgerr.audit_log(changed_at DESC);

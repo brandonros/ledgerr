@@ -1,4 +1,4 @@
-CREATE TABLE IF NOT EXISTS payment_accounts (
+CREATE TABLE IF NOT EXISTS ledgerr.payment_accounts (
     account_id SERIAL PRIMARY KEY,
     external_account_id VARCHAR(50) UNIQUE NOT NULL,
     account_holder_name VARCHAR(100) NOT NULL,
@@ -12,4 +12,4 @@ CREATE TABLE IF NOT EXISTS payment_accounts (
     version INTEGER DEFAULT 1
 );
 
-CREATE INDEX IF NOT EXISTS idx_payment_accounts_external_active ON payment_accounts (external_account_id) WHERE is_active = true;
+CREATE INDEX IF NOT EXISTS idx_payment_accounts_external_active ON ledgerr.payment_accounts (external_account_id) WHERE is_active = true;

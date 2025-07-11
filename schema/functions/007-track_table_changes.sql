@@ -1,4 +1,4 @@
-CREATE OR REPLACE FUNCTION track_table_changes()
+CREATE OR REPLACE FUNCTION ledgerr.track_table_changes()
 RETURNS TRIGGER AS $$
 DECLARE
     v_record_id TEXT;

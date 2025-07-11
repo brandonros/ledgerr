@@ -1,4 +1,4 @@
-CREATE TABLE IF NOT EXISTS account_balances (
+CREATE TABLE IF NOT EXISTS ledgerr.account_balances (
     account_id INTEGER,
     current_balance DECIMAL(15,2) DEFAULT 0.00,
     available_balance DECIMAL(15,2) DEFAULT 0.00,
@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS account_balances (
 ) PARTITION BY HASH (account_id);
 
 -- Unique constraint to prevent duplicate account balances
-CREATE UNIQUE INDEX IF NOT EXISTS idx_account_balances_account_id ON account_balances(account_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_account_balances_account_id ON ledgerr.account_balances(account_id);
 
 -- Index for high-frequency balance lookups
-CREATE INDEX IF NOT EXISTS idx_account_balances_lookup ON account_balances(account_id, version) WHERE current_balance > 0;
+CREATE INDEX IF NOT EXISTS idx_account_balances_lookup ON ledgerr.account_balances(account_id, version) WHERE current_balance > 0;

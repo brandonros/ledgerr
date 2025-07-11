@@ -1,4 +1,4 @@
-CREATE TABLE IF NOT EXISTS payment_status_log (
+CREATE TABLE IF NOT EXISTS ledgerr.payment_status_log (
     log_id SERIAL,
     payment_id VARCHAR(50) NOT NULL,
     status VARCHAR(20) NOT NULL,
@@ -10,4 +10,4 @@ CREATE TABLE IF NOT EXISTS payment_status_log (
     PRIMARY KEY (log_id, timestamp)
 ) PARTITION BY RANGE (timestamp);
 
-CREATE INDEX IF NOT EXISTS idx_payment_status_log_payment_id ON payment_status_log(payment_id, timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_payment_status_log_payment_id ON ledgerr.payment_status_log(payment_id, timestamp DESC);
