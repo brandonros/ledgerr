@@ -27,10 +27,8 @@ DECLARE
     v_journal_lines JSONB;
     v_processing_time_ms INTEGER;
 BEGIN
-    -- Check transaction isolation level
+    -- Require SERIALIZABLE isolation
     SELECT current_setting('transaction_isolation') INTO v_isolation_level;
-    
-    -- Require SERIALIZABLE isolation for payment processing
     IF v_isolation_level != 'serializable' THEN
         RAISE EXCEPTION 'Payment processing requires SERIALIZABLE isolation level, current level is: %', v_isolation_level;
     END IF;

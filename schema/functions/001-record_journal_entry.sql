@@ -15,6 +15,12 @@ DECLARE
     v_credit_amount DECIMAL(15,2);
     v_line_description TEXT;
 BEGIN
+    -- Require SERIALIZABLE isolation
+    SELECT current_setting('transaction_isolation') INTO v_isolation_level;
+    IF v_isolation_level != 'serializable' THEN
+        RAISE EXCEPTION 'Payment processing requires SERIALIZABLE isolation level, current level is: %', v_isolation_level;
+    END IF;
+
     -- Validate input parameters
     IF p_entry_date IS NULL THEN
         RAISE EXCEPTION 'Entry date cannot be null';

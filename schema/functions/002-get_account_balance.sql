@@ -10,7 +10,7 @@ DECLARE
     v_credit_total DECIMAL(15,2);
 BEGIN
     RAISE NOTICE 'calculate_balance_from_journal: START - account_id=%, as_of_date=%', p_account_id, p_as_of_date;
-    
+
     -- Get account type (with validation)
     SELECT account_type INTO v_account_type
     FROM ledgerr.accounts 
@@ -281,6 +281,14 @@ BEGIN
     
     RAISE NOTICE 'get_account_balance: START - account_id=%, as_of_date=%, use_cache=%, is_current_date=%', 
         p_account_id, p_as_of_date, p_use_cache, v_is_current_date;
+
+    -- Require SERIALIZABLE isolation if we are using cache
+    IF p_use_cache THEN
+        SELECT current_setting('transaction_isolation') INTO v_isolation_level;
+        IF v_isolation_level != 'serializable' THEN
+            RAISE EXCEPTION 'Cached balance operations require SERIALIZABLE isolation level, current level is: %', v_isolation_level;
+        END IF;
+    END IF;
     
     -- For current date, try cache first if requested
     IF p_use_cache AND v_is_current_date THEN

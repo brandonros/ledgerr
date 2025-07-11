@@ -15,6 +15,12 @@ DECLARE
     v_new_version INTEGER;
     v_daily_reset_needed BOOLEAN := FALSE;
 BEGIN
+    -- Require SERIALIZABLE isolation
+    SELECT current_setting('transaction_isolation') INTO v_isolation_level;
+    IF v_isolation_level != 'serializable' THEN
+        RAISE EXCEPTION 'Balance update requires SERIALIZABLE isolation level, current level is: %', v_isolation_level;
+    END IF;
+
     -- Initialize balance if it doesn't exist
     PERFORM ledgerr.initialize_account_balance(p_account_id);
     
