@@ -7,6 +7,7 @@ DIRECTORIES=(
     "schemas"
     "tables" 
     "functions"
+    "utilities"
     "triggers"
     "partitions"
 )
