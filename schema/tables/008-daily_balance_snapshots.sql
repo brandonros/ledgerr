@@ -11,4 +11,4 @@ CREATE TABLE IF NOT EXISTS ledgerr.daily_balance_snapshots (
 ) PARTITION BY RANGE (snapshot_date);
 
 CREATE INDEX IF NOT EXISTS idx_daily_balance_snapshots_account_date 
-ON daily_balance_snapshots(account_id, snapshot_date DESC);
+ON ledgerr.daily_balance_snapshots(account_id, snapshot_date DESC);

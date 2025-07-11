@@ -8,6 +8,7 @@ DIRECTORIES=(
     "tables" 
     "functions"
     "triggers"
+    "partitions"
 )
 
 # Process each directory in order

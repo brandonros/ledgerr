@@ -31,7 +31,7 @@ BEGIN
     END CASE;
     
     -- Insert audit record
-    INSERT INTO audit_log (
+    INSERT INTO ledgerr.audit_log (
         event_type, 
         table_name, 
         record_id, 

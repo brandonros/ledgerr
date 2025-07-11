@@ -12,7 +12,7 @@ BEGIN
         a.account_name,
         a.account_type,
         get_account_balance(a.account_id, p_as_of_date) as balance
-    FROM accounts a
+    FROM ledgerr.accounts a
     WHERE a.is_active = TRUE
     ORDER BY a.account_code;
 END;

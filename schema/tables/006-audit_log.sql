@@ -2,7 +2,7 @@ CREATE TABLE IF NOT EXISTS ledgerr.audit_log (
     log_id SERIAL,
     event_type VARCHAR(50) NOT NULL,
     table_name VARCHAR(50) NOT NULL,
-    record_id INTEGER NOT NULL,
+    record_id TEXT NOT NULL,
     old_values JSONB,
     new_values JSONB,
     changed_by VARCHAR(50) NOT NULL,

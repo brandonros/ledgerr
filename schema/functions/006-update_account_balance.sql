@@ -22,7 +22,7 @@ BEGIN
     SELECT version, current_balance, 
            (last_daily_reset < CURRENT_DATE) as daily_reset_needed
     INTO v_current_version, v_new_balance, v_daily_reset_needed
-    FROM account_balances 
+    FROM ledgerr.account_balances 
     WHERE account_id = p_account_id 
     FOR UPDATE;
     

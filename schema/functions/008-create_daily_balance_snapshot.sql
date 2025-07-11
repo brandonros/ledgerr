@@ -14,7 +14,7 @@ DECLARE
     v_transaction_count INTEGER;
 BEGIN
     -- Check if snapshot already exists
-    IF EXISTS (SELECT 1 FROM daily_balance_snapshots WHERE snapshot_date = p_snapshot_date LIMIT 1) THEN
+    IF EXISTS (SELECT 1 FROM ledgerr.daily_balance_snapshots WHERE snapshot_date = p_snapshot_date LIMIT 1) THEN
         RAISE NOTICE 'Snapshot for % already exists, skipping', p_snapshot_date;
         RETURN QUERY SELECT 0, 0;
         RETURN;
@@ -22,11 +22,11 @@ BEGIN
     
     -- Process each active account
     FOR v_account IN 
-        SELECT account_id FROM accounts WHERE is_active = TRUE
+        SELECT account_id FROM ledgerr.accounts WHERE is_active = TRUE
     LOOP
         -- Get opening balance (previous day's closing)
         SELECT closing_balance INTO v_opening_balance
-        FROM daily_balance_snapshots 
+        FROM ledgerr.daily_balance_snapshots 
         WHERE account_id = v_account.account_id 
           AND snapshot_date = p_snapshot_date - INTERVAL '1 day';
         
@@ -51,7 +51,7 @@ BEGIN
           AND je.is_posted = TRUE;
         
         -- Insert snapshot
-        INSERT INTO daily_balance_snapshots (
+        INSERT INTO ledgerr.daily_balance_snapshots (
             snapshot_date,
             account_id,
             opening_balance,

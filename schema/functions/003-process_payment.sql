@@ -122,7 +122,7 @@ BEGIN
     
     -- Check daily limits
     SELECT COALESCE(daily_debit_total, 0) INTO v_daily_total
-    FROM account_balances 
+    FROM ledgerr.account_balances 
     WHERE account_id = v_from_payment_account.account_id;
     
     IF (v_daily_total + p_amount) > v_from_payment_account.daily_limit THEN
