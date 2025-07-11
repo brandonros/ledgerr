@@ -17,3 +17,17 @@ BEGIN
     ORDER BY a.account_code;
 END;
 $$ LANGUAGE plpgsql;
+
+-- Override function to accept TIMESTAMP and cast to DATE
+CREATE OR REPLACE FUNCTION ledgerr.generate_trial_balance(p_as_of_timestamp TIMESTAMP) 
+RETURNS TABLE (
+    account_code VARCHAR(10),
+    account_name VARCHAR(100),
+    account_type VARCHAR(20),
+    balance DECIMAL(15,2)
+) AS $$
+BEGIN
+    RETURN QUERY
+    SELECT * FROM ledgerr.generate_trial_balance(p_as_of_timestamp::DATE);
+END;
+$$ LANGUAGE plpgsql;
