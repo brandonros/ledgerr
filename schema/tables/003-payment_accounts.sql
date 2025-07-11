@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS ledgerr.payment_accounts (
     risk_level VARCHAR(10) DEFAULT 'LOW' CHECK (risk_level IN ('LOW', 'MEDIUM', 'HIGH')),
     last_transaction_at TIMESTAMP,
     balance_version INTEGER DEFAULT 1,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     
     -- Composite PK required for partitioning

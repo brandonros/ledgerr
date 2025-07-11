@@ -1,4 +1,4 @@
-CREATE OR REPLACE FUNCTION ledgerr.update_payment_account_balance(
+CREATE OR REPLACE FUNCTION ledgerr.create_payment_account_transaction(
     p_partner_id UUID,
     p_payment_account_id UUID,
     p_amount DECIMAL(15,2),

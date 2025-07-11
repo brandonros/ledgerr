@@ -16,9 +16,9 @@ CREATE TABLE IF NOT EXISTS ledgerr.payment_account_transactions (
     external_reference VARCHAR(50),
     payment_network VARCHAR(20),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    
-    -- Primary key must include partition key
-    PRIMARY KEY (transaction_id, created_at),
+
+    -- primary key
+    PRIMARY KEY (partner_id, transaction_id),
     
     -- Foreign keys
     CONSTRAINT fk_payment_account_transactions_journal_line 
@@ -28,7 +28,7 @@ CREATE TABLE IF NOT EXISTS ledgerr.payment_account_transactions (
     CONSTRAINT fk_payment_account_transactions_payment_account 
     FOREIGN KEY (partner_id, payment_account_id) 
     REFERENCES ledgerr.payment_accounts(partner_id, payment_account_id)
-) PARTITION BY RANGE (created_at);
+) PARTITION BY HASH (partner_id);
 
 CREATE INDEX IF NOT EXISTS idx_payment_account_transactions_account_time 
 ON ledgerr.payment_account_transactions(payment_account_id, created_at DESC);
