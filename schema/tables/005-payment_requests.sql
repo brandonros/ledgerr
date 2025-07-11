@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS ledgerr.payment_requests (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     processed_at TIMESTAMP,
     expires_at TIMESTAMP DEFAULT (CURRENT_TIMESTAMP + INTERVAL '24 hours')
-);
+) PARTITION BY RANGE (created_at);
 
 CREATE INDEX IF NOT EXISTS idx_payment_requests_payment_id ON ledgerr.payment_requests(payment_id);
 CREATE INDEX IF NOT EXISTS idx_payment_requests_status ON ledgerr.payment_requests(status, created_at);

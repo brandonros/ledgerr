@@ -6,4 +6,4 @@ CREATE TABLE IF NOT EXISTS ledgerr.accounts (
     parent_account_id INTEGER REFERENCES ledgerr.accounts(account_id),
     is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
+) PARTITION BY HASH (account_id);

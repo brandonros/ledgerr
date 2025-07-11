@@ -1,5 +1,5 @@
 CREATE TABLE IF NOT EXISTS ledgerr.payment_accounts (
-    account_id SERIAL PRIMARY KEY,
+    payment_account_id SERIAL PRIMARY KEY,
     external_account_id VARCHAR(50) UNIQUE NOT NULL,
     account_holder_name VARCHAR(100) NOT NULL,
     account_type VARCHAR(20) NOT NULL CHECK (account_type IN ('CHECKING', 'SAVINGS', 'PREPAID', 'MERCHANT')),
@@ -10,6 +10,6 @@ CREATE TABLE IF NOT EXISTS ledgerr.payment_accounts (
     last_transaction_at TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     version INTEGER DEFAULT 1
-);
+) PARTITION BY HASH (payment_account_id);
 
 CREATE INDEX IF NOT EXISTS idx_payment_accounts_external_active ON ledgerr.payment_accounts (external_account_id) WHERE is_active = true;
