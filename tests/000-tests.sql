@@ -342,7 +342,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- ============================================================================
--- TEST 5: GL Account Balance Inquiry (Updated)
+-- TEST 5: GL Account Balance Inquiry
 -- ============================================================================
 CREATE OR REPLACE FUNCTION ledgerr.test_gl_balance_inquiry()
 RETURNS void AS $$

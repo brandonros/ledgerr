@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS ledgerr.payment_accounts (
     account_type VARCHAR(20) NOT NULL CHECK (account_type IN ('CHECKING', 'SAVINGS', 'PREPAID', 'MERCHANT')),
     gl_account_id UUID NOT NULL REFERENCES ledgerr.gl_accounts(gl_account_id),
     
-    -- Embedded balances (critical at this scale)
+    -- Embedded balances
     current_balance DECIMAL(15,2) DEFAULT 0.00,
     available_balance DECIMAL(15,2) DEFAULT 0.00,
     pending_debits DECIMAL(15,2) DEFAULT 0.00,

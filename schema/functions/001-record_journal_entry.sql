@@ -44,7 +44,7 @@ BEGIN
     FOR v_line IN SELECT * FROM jsonb_array_elements(p_journal_lines)
     LOOP
         -- Extract values from JSON
-        v_gl_account_id := (v_line->>'gl_account_id')::UUID; -- Fixed: use gl_account_id
+        v_gl_account_id := (v_line->>'gl_account_id')::UUID;
         v_debit_amount := COALESCE((v_line->>'debit_amount')::DECIMAL(15,2), 0);
         v_credit_amount := COALESCE((v_line->>'credit_amount')::DECIMAL(15,2), 0);
         v_line_description := v_line->>'description';
