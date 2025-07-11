@@ -1,8 +1,8 @@
 CREATE OR REPLACE FUNCTION process_payment(
     p_idempotency_key VARCHAR(50),
     p_payment_id VARCHAR(50),
-    p_from_account_id VARCHAR(50),
-    p_to_account_id VARCHAR(50),
+    p_from_external_account_id VARCHAR(50),
+    p_to_external_account_id VARCHAR(50),
     p_amount DECIMAL(15,2),
     p_description TEXT,
     p_payment_type VARCHAR(20) DEFAULT 'TRANSFER',
@@ -31,19 +31,63 @@ BEGIN
         -- Return existing result
         RETURN QUERY 
         SELECT pr.status, pr.journal_entry_id, pr.response_data->>'error_message', 
-               NULL::DECIMAL(15,2), NULL::DECIMAL(15,2), 
-               EXTRACT(EPOCH FROM (processed_at - created_at))::INTEGER * 1000
+               (pr.response_data->>'from_balance')::DECIMAL(15,2), 
+               (pr.response_data->>'to_balance')::DECIMAL(15,2), 
+               (pr.response_data->>'processing_time_ms')::INTEGER
         FROM payment_requests pr
         WHERE pr.idempotency_key = p_idempotency_key;
         RETURN;
     END IF;
     
-    -- Insert payment request for tracking
+    -- Get and lock payment accounts by external_account_id
+    SELECT * INTO v_from_payment_account
+    FROM payment_accounts 
+    WHERE external_account_id = p_from_external_account_id AND is_active = TRUE
+    FOR UPDATE;
+    
+    IF v_from_payment_account.account_id IS NULL THEN
+        INSERT INTO payment_requests (
+            idempotency_key, payment_id, from_account_id, to_account_id, 
+            amount, payment_type, status, response_data, processed_at
+        ) VALUES (
+            p_idempotency_key, p_payment_id, NULL, NULL,
+            p_amount, p_payment_type, 'FAILED', 
+            jsonb_build_object('error_message', 'Source account not found'),
+            CURRENT_TIMESTAMP
+        );
+        
+        RETURN QUERY SELECT 'FAILED'::VARCHAR(20), NULL::INTEGER, 
+                           'Source account not found'::TEXT, NULL::DECIMAL(15,2), NULL::DECIMAL(15,2), 0;
+        RETURN;
+    END IF;
+    
+    SELECT * INTO v_to_payment_account
+    FROM payment_accounts 
+    WHERE external_account_id = p_to_external_account_id AND is_active = TRUE
+    FOR UPDATE;
+    
+    IF v_to_payment_account.account_id IS NULL THEN
+        INSERT INTO payment_requests (
+            idempotency_key, payment_id, from_account_id, to_account_id, 
+            amount, payment_type, status, response_data, processed_at
+        ) VALUES (
+            p_idempotency_key, p_payment_id, v_from_payment_account.account_id, NULL,
+            p_amount, p_payment_type, 'FAILED', 
+            jsonb_build_object('error_message', 'Destination account not found'),
+            CURRENT_TIMESTAMP
+        );
+        
+        RETURN QUERY SELECT 'FAILED'::VARCHAR(20), NULL::INTEGER, 
+                           'Destination account not found'::TEXT, NULL::DECIMAL(15,2), NULL::DECIMAL(15,2), 0;
+        RETURN;
+    END IF;
+    
+    -- Insert payment request for tracking with proper account_ids
     INSERT INTO payment_requests (
         idempotency_key, payment_id, from_account_id, to_account_id, 
         amount, payment_type, status
     ) VALUES (
-        p_idempotency_key, p_payment_id, p_from_account_id, p_to_account_id,
+        p_idempotency_key, p_payment_id, v_from_payment_account.account_id, v_to_payment_account.account_id,
         p_amount, p_payment_type, 'PROCESSING'
     );
     
