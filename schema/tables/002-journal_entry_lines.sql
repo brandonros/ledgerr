@@ -1,7 +1,7 @@
 CREATE TABLE IF NOT EXISTS journal_entry_lines (
     line_id SERIAL,
-    entry_id INTEGER NOT NULL,
-    account_id INTEGER NOT NULL,
+    entry_id INTEGER NOT NULL REFERENCES journal_entries(entry_id),
+    account_id INTEGER NOT NULL REFERENCES accounts(account_id),
     debit_amount DECIMAL(15,2) DEFAULT 0.00,
     credit_amount DECIMAL(15,2) DEFAULT 0.00,
     description TEXT,

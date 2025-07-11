@@ -26,6 +26,9 @@ DECLARE
     v_journal_lines JSONB;
     v_processing_time_ms INTEGER;
 BEGIN
+    -- Set transaction isolation level for consistency
+    SET TRANSACTION ISOLATION LEVEL SERIALIZABLE;
+    
     -- Check for existing request (idempotency)
     IF EXISTS (SELECT 1 FROM payment_requests WHERE idempotency_key = p_idempotency_key) THEN
         -- Return existing result
@@ -91,41 +94,6 @@ BEGIN
         p_amount, p_payment_type, 'PROCESSING'
     );
     
-    -- Get and lock payment accounts
-    SELECT * INTO v_from_payment_account
-    FROM payment_accounts 
-    WHERE external_account_id = p_from_account_id AND is_active = TRUE
-    FOR UPDATE;
-    
-    IF v_from_payment_account.account_id IS NULL THEN
-        UPDATE payment_requests 
-        SET status = 'FAILED', 
-            response_data = jsonb_build_object('error_message', 'Source account not found'),
-            processed_at = CURRENT_TIMESTAMP
-        WHERE idempotency_key = p_idempotency_key;
-        
-        RETURN QUERY SELECT 'FAILED'::VARCHAR(20), NULL::INTEGER, 
-                           'Source account not found'::TEXT, NULL::DECIMAL(15,2), NULL::DECIMAL(15,2), 0;
-        RETURN;
-    END IF;
-    
-    SELECT * INTO v_to_payment_account
-    FROM payment_accounts 
-    WHERE external_account_id = p_to_account_id AND is_active = TRUE
-    FOR UPDATE;
-    
-    IF v_to_payment_account.account_id IS NULL THEN
-        UPDATE payment_requests 
-        SET status = 'FAILED', 
-            response_data = jsonb_build_object('error_message', 'Destination account not found'),
-            processed_at = CURRENT_TIMESTAMP
-        WHERE idempotency_key = p_idempotency_key;
-        
-        RETURN QUERY SELECT 'FAILED'::VARCHAR(20), NULL::INTEGER, 
-                           'Destination account not found'::TEXT, NULL::DECIMAL(15,2), NULL::DECIMAL(15,2), 0;
-        RETURN;
-    END IF;
-    
     -- Validation checks
     IF p_amount <= 0 THEN
         UPDATE payment_requests 
@@ -174,16 +142,16 @@ BEGIN
         jsonb_build_object(
             'account_id', v_from_payment_account.account_id,
             'credit_amount', p_amount,
-            'description', format('Payment to %s', p_to_account_id),
-            'external_account_id', p_from_account_id,
+            'description', format('Payment to %s', p_to_external_account_id),
+            'external_account_id', p_from_external_account_id,
             'payment_id', p_payment_id,
             'payment_type', p_payment_type
         ),
         jsonb_build_object(
             'account_id', v_to_payment_account.account_id,
             'debit_amount', p_amount,
-            'description', format('Payment from %s', p_from_account_id),
-            'external_account_id', p_to_account_id,
+            'description', format('Payment from %s', p_from_external_account_id),
+            'external_account_id', p_to_external_account_id,
             'payment_id', p_payment_id,
             'payment_type', p_payment_type
         )
@@ -193,9 +161,9 @@ BEGIN
     SELECT record_journal_entry(
         CURRENT_DATE,
         p_description,
+        v_journal_lines,
         p_payment_id,
-        'payment_system',
-        v_journal_lines
+        'payment_system'
     ) INTO v_entry_id;
     
     -- Update balances atomically
