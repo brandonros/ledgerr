@@ -1,6 +1,9 @@
 -- Unit test for process_payment function (happy path)
 BEGIN;
 
+-- Set transaction isolation level to SERIALIZABLE for the test
+SET TRANSACTION ISOLATION LEVEL SERIALIZABLE;
+
 SAVEPOINT before_test;
 
 DO $$

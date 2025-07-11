@@ -17,6 +17,7 @@ CREATE OR REPLACE FUNCTION ledgerr.process_payment(
 ) AS $$
 DECLARE
     v_start_time TIMESTAMP := CURRENT_TIMESTAMP;
+    v_isolation_level TEXT;
     v_entry_id INTEGER;
     v_from_payment_account ledgerr.payment_accounts%ROWTYPE;
     v_to_payment_account ledgerr.payment_accounts%ROWTYPE;
@@ -26,6 +27,14 @@ DECLARE
     v_journal_lines JSONB;
     v_processing_time_ms INTEGER;
 BEGIN
+    -- Check transaction isolation level
+    SELECT current_setting('transaction_isolation') INTO v_isolation_level;
+    
+    -- Require SERIALIZABLE isolation for payment processing
+    IF v_isolation_level != 'serializable' THEN
+        RAISE EXCEPTION 'Payment processing requires SERIALIZABLE isolation level, current level is: %', v_isolation_level;
+    END IF;
+
     -- Check for existing request (idempotency)
     IF EXISTS (SELECT 1 FROM ledgerr.payment_requests WHERE idempotency_key = p_idempotency_key) THEN
         -- Return existing result
