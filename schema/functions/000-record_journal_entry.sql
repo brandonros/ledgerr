@@ -1,9 +1,9 @@
 CREATE OR REPLACE FUNCTION record_journal_entry(
     p_entry_date DATE,
     p_description TEXT,
+    p_journal_lines JSONB,
     p_reference_number VARCHAR(50) DEFAULT NULL,
-    p_created_by VARCHAR(50) DEFAULT 'system',
-    p_journal_lines JSONB
+    p_created_by VARCHAR(50) DEFAULT 'system'
 ) RETURNS INTEGER AS $$
 DECLARE
     v_entry_id INTEGER;

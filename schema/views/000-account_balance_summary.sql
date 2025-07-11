@@ -1,4 +1,4 @@
-CREATE MATERIALIZED VIEW account_balance_summary AS
+CREATE OR REPLACE MATERIALIZED VIEW account_balance_summary AS
 SELECT 
     jel.account_id,
     a.account_code,
