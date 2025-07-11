@@ -17,26 +17,25 @@ BEGIN
     
     -- Setup: Create ledger accounts first
     INSERT INTO ledgerr.accounts (account_code, account_name, account_type, is_active)
-    VALUES 
-        ('PAY001', 'Payment Source Account', 'ASSET', TRUE),
-        ('PAY002', 'Payment Destination Account', 'ASSET', TRUE)
-    ON CONFLICT (account_code) DO UPDATE SET account_name = EXCLUDED.account_name;
+    VALUES ('PAY001', 'Payment Source Account', 'ASSET', TRUE)
+    ON CONFLICT (account_code) DO UPDATE SET account_name = EXCLUDED.account_name
+    RETURNING account_id INTO v_from_ledger_account_id;
     
-    SELECT account_id INTO v_from_ledger_account_id FROM ledgerr.accounts WHERE account_code = 'PAY001';
-    SELECT account_id INTO v_to_ledger_account_id FROM ledgerr.accounts WHERE account_code = 'PAY002';
-    
-    -- Setup: Create payment accounts
+    INSERT INTO ledgerr.accounts (account_code, account_name, account_type, is_active)
+    VALUES ('PAY002', 'Payment Destination Account', 'ASSET', TRUE)
+    ON CONFLICT (account_code) DO UPDATE SET account_name = EXCLUDED.account_name
+    RETURNING account_id INTO v_to_ledger_account_id;
+
+    -- Setup: Create payment accounts (handle both inserts properly)
     INSERT INTO ledgerr.payment_accounts (external_account_id, account_holder_name, account_type, daily_limit, is_active)
-    VALUES 
-        ('EXT-PAY-001', 'Test Sender', 'CHECKING', 10000.00, TRUE),
-        ('EXT-PAY-002', 'Test Receiver', 'CHECKING', 10000.00, TRUE)
+    VALUES ('EXT-PAY-001', 'Test Sender', 'CHECKING', 10000.00, TRUE)
     ON CONFLICT (external_account_id) DO UPDATE SET account_holder_name = EXCLUDED.account_holder_name
     RETURNING account_id INTO v_from_payment_account_id;
     
-    SELECT account_id INTO v_to_payment_account_id FROM ledgerr.payment_accounts WHERE external_account_id = 'EXT-PAY-002';
-    IF v_from_payment_account_id IS NULL THEN
-        SELECT account_id INTO v_from_payment_account_id FROM ledgerr.payment_accounts WHERE external_account_id = 'EXT-PAY-001';
-    END IF;
+    INSERT INTO ledgerr.payment_accounts (external_account_id, account_holder_name, account_type, daily_limit, is_active)
+    VALUES ('EXT-PAY-002', 'Test Receiver', 'CHECKING', 10000.00, TRUE)
+    ON CONFLICT (external_account_id) DO UPDATE SET account_holder_name = EXCLUDED.account_holder_name
+    RETURNING account_id INTO v_to_payment_account_id;
     
     -- Update payment accounts to reference the ledger accounts
     UPDATE ledgerr.payment_accounts SET account_id = v_from_ledger_account_id WHERE external_account_id = 'EXT-PAY-001';

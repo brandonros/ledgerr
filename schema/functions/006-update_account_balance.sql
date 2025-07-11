@@ -16,7 +16,7 @@ DECLARE
     v_daily_reset_needed BOOLEAN := FALSE;
 BEGIN
     -- Initialize balance if it doesn't exist
-    PERFORM initialize_account_balance(p_account_id);
+    PERFORM ledgerr.initialize_account_balance(p_account_id);
     
     -- Lock the row and get current state
     SELECT version, current_balance, 
@@ -38,7 +38,7 @@ BEGIN
     v_new_version := v_current_version + 1;
     
     -- Update with optimistic locking
-    UPDATE account_balances SET
+    UPDATE ledgerr.account_balances SET
         current_balance = v_new_balance,
         available_balance = v_new_balance - pending_debits,
         version = v_new_version,

@@ -26,18 +26,15 @@ DECLARE
     v_journal_lines JSONB;
     v_processing_time_ms INTEGER;
 BEGIN
-    -- Set transaction isolation level for consistency
-    SET TRANSACTION ISOLATION LEVEL SERIALIZABLE;
-    
     -- Check for existing request (idempotency)
-    IF EXISTS (SELECT 1 FROM payment_requests WHERE idempotency_key = p_idempotency_key) THEN
+    IF EXISTS (SELECT 1 FROM ledgerr.payment_requests WHERE idempotency_key = p_idempotency_key) THEN
         -- Return existing result
         RETURN QUERY 
         SELECT pr.status, pr.journal_entry_id, pr.response_data->>'error_message', 
                (pr.response_data->>'from_balance')::DECIMAL(15,2), 
                (pr.response_data->>'to_balance')::DECIMAL(15,2), 
                (pr.response_data->>'processing_time_ms')::INTEGER
-        FROM payment_requests pr
+        FROM ledgerr.payment_requests pr
         WHERE pr.idempotency_key = p_idempotency_key;
         RETURN;
     END IF;
@@ -49,7 +46,7 @@ BEGIN
     FOR UPDATE;
     
     IF v_from_payment_account.account_id IS NULL THEN
-        INSERT INTO payment_requests (
+        INSERT INTO ledgerr.payment_requests (
             idempotency_key, payment_id, from_account_id, to_account_id, 
             amount, payment_type, status, response_data, processed_at
         ) VALUES (
@@ -70,7 +67,7 @@ BEGIN
     FOR UPDATE;
     
     IF v_to_payment_account.account_id IS NULL THEN
-        INSERT INTO payment_requests (
+        INSERT INTO ledgerr.payment_requests (
             idempotency_key, payment_id, from_account_id, to_account_id, 
             amount, payment_type, status, response_data, processed_at
         ) VALUES (
@@ -86,7 +83,7 @@ BEGIN
     END IF;
     
     -- Insert payment request for tracking with proper account_ids
-    INSERT INTO payment_requests (
+    INSERT INTO ledgerr.payment_requests (
         idempotency_key, payment_id, from_account_id, to_account_id, 
         amount, payment_type, status
     ) VALUES (
@@ -96,7 +93,7 @@ BEGIN
     
     -- Validation checks
     IF p_amount <= 0 THEN
-        UPDATE payment_requests 
+        UPDATE ledgerr.payment_requests 
         SET status = 'FAILED', 
             response_data = jsonb_build_object('error_message', 'Amount must be positive'),
             processed_at = CURRENT_TIMESTAMP
@@ -109,7 +106,7 @@ BEGIN
     
     -- Check available balance
     IF ledgerr.get_account_balance(v_from_payment_account.account_id, CURRENT_DATE, TRUE) < p_amount THEN
-        UPDATE payment_requests 
+        UPDATE ledgerr.payment_requests 
         SET status = 'FAILED', 
             response_data = jsonb_build_object('error_message', 'Insufficient funds'),
             processed_at = CURRENT_TIMESTAMP
@@ -126,7 +123,7 @@ BEGIN
     WHERE account_id = v_from_payment_account.account_id;
     
     IF (v_daily_total + p_amount) > v_from_payment_account.daily_limit THEN
-        UPDATE payment_requests 
+        UPDATE ledgerr.payment_requests 
         SET status = 'FAILED', 
             response_data = jsonb_build_object('error_message', 'Daily limit exceeded'),
             processed_at = CURRENT_TIMESTAMP
@@ -158,7 +155,7 @@ BEGIN
     );
     
     -- Record journal entry
-    SELECT record_journal_entry(
+    SELECT ledgerr.record_journal_entry(
         CURRENT_DATE,
         p_description,
         v_journal_lines,
@@ -168,14 +165,14 @@ BEGIN
     
     -- Update balances atomically
     SELECT * INTO v_from_balance_result
-    FROM update_account_balance(
+    FROM ledgerr.update_account_balance(
         v_from_payment_account.account_id,
         p_amount,  -- debit amount
         0.00       -- credit amount
     );
     
     SELECT * INTO v_to_balance_result
-    FROM update_account_balance(
+    FROM ledgerr.update_account_balance(
         v_to_payment_account.account_id,
         0.00,      -- debit amount
         p_amount   -- credit amount
@@ -193,7 +190,7 @@ BEGIN
     v_processing_time_ms := EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - v_start_time))::INTEGER * 1000;
     
     -- Update payment request status
-    UPDATE payment_requests 
+    UPDATE ledgerr.payment_requests 
     SET status = 'SUCCESS',
         journal_entry_id = v_entry_id,
         response_data = jsonb_build_object(
@@ -205,7 +202,7 @@ BEGIN
     WHERE idempotency_key = p_idempotency_key;
     
     -- Log payment status
-    INSERT INTO payment_status_log (
+    INSERT INTO ledgerr.payment_status_log (
         payment_id, status, status_reason, processing_time_ms
     ) VALUES (
         p_payment_id, 'SUCCESS', 'Payment processed successfully', v_processing_time_ms
@@ -219,14 +216,14 @@ BEGIN
 EXCEPTION
     WHEN OTHERS THEN
         -- Update payment request with error
-        UPDATE payment_requests 
+        UPDATE ledgerr.payment_requests 
         SET status = 'FAILED', 
             response_data = jsonb_build_object('error_message', SQLERRM),
             processed_at = CURRENT_TIMESTAMP
         WHERE idempotency_key = p_idempotency_key;
         
         -- Log error
-        INSERT INTO payment_status_log (
+        INSERT INTO ledgerr.payment_status_log (
             payment_id, status, status_reason, processing_time_ms
         ) VALUES (
             p_payment_id, 'FAILED', SQLERRM, 
