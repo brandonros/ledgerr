@@ -109,12 +109,12 @@ BEGIN
     -- Update balances atomically with the actual transaction type
     PERFORM ledgerr.create_payment_account_transaction(
         p_from_partner_id, p_from_payment_account_id, -p_amount, p_transaction_type,
-        v_from_line_id, v_entry_date, p_description, p_external_reference
+        v_entry_id, v_from_line_id, v_entry_date, p_description, p_external_reference
     );
     
     PERFORM ledgerr.create_payment_account_transaction(
         p_to_partner_id, p_to_payment_account_id, p_amount, p_transaction_type, 
-        v_to_line_id, v_entry_date, p_description, p_external_reference
+        v_entry_id, v_to_line_id, v_entry_date, p_description, p_external_reference
     );
     
     RETURN v_entry_id;

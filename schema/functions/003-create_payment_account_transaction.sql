@@ -3,6 +3,7 @@ CREATE OR REPLACE FUNCTION ledgerr.create_payment_account_transaction(
     p_payment_account_id UUID,
     p_amount DECIMAL(15,2),
     p_transaction_type VARCHAR(20),
+    p_journal_entry_id UUID,
     p_journal_line_id UUID,
     p_entry_date DATE,
     p_description TEXT DEFAULT NULL,
@@ -51,6 +52,7 @@ BEGIN
     INSERT INTO ledgerr.payment_account_transactions (
         partner_id,
         payment_account_id,
+        journal_entry_id,
         journal_line_id,
         entry_date,
         amount,
@@ -61,6 +63,7 @@ BEGIN
     ) VALUES (
         p_partner_id,
         p_payment_account_id,
+        p_journal_entry_id,
         p_journal_line_id,
         p_entry_date,
         p_amount,

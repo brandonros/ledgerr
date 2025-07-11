@@ -4,32 +4,40 @@ RETURNS void AS $$
 DECLARE
     v_asset_gl_id UUID;
     v_liability_gl_id UUID;
+    v_bank_settlement_gl_id UUID;
     v_partner1_id UUID := '11111111-1111-1111-1111-111111111111';
     v_partner2_id UUID := '22222222-2222-2222-2222-222222222222';
+    v_bank_partner_id UUID := '99999999-9999-9999-9999-999999999999';
 BEGIN
     -- Clean up any existing test data
-    DELETE FROM ledgerr.payment_account_transactions WHERE partner_id IN (v_partner1_id, v_partner2_id);
-    DELETE FROM ledgerr.payment_accounts WHERE partner_id IN (v_partner1_id, v_partner2_id);
+    DELETE FROM ledgerr.payment_account_transactions WHERE partner_id IN (v_partner1_id, v_partner2_id, v_bank_partner_id);
+    DELETE FROM ledgerr.payment_accounts WHERE partner_id IN (v_partner1_id, v_partner2_id, v_bank_partner_id);
     DELETE FROM ledgerr.journal_entry_lines WHERE entry_date = CURRENT_DATE;
     DELETE FROM ledgerr.journal_entries WHERE entry_date = CURRENT_DATE;
-    DELETE FROM ledgerr.gl_accounts WHERE account_code IN ('TEST_ASSET', 'TEST_LIABILITY');
+    -- Use shorter account codes that fit in VARCHAR(10)
+    DELETE FROM ledgerr.gl_accounts WHERE account_code IN ('TST_ASSET', 'TST_LIAB', 'TST_SETTLE');
     
-    -- Create test GL accounts
+    -- Create test GL accounts with shorter codes
     INSERT INTO ledgerr.gl_accounts (account_code, account_name, account_type)
-    VALUES ('TEST_ASSET', 'Test Customer Asset Account', 'ASSET')
+    VALUES ('TST_ASSET', 'Test Customer Asset Account', 'ASSET')
     RETURNING gl_account_id INTO v_asset_gl_id;
     
     INSERT INTO ledgerr.gl_accounts (account_code, account_name, account_type)  
-    VALUES ('TEST_LIABILITY', 'Test Customer Liability Account', 'LIABILITY')
+    VALUES ('TST_LIAB', 'Test Customer Liability Account', 'LIABILITY')
     RETURNING gl_account_id INTO v_liability_gl_id;
     
-    -- Create test payment accounts
+    INSERT INTO ledgerr.gl_accounts (account_code, account_name, account_type)
+    VALUES ('TST_SETTLE', 'Test Bank Settlement Account', 'ASSET')
+    RETURNING gl_account_id INTO v_bank_settlement_gl_id;
+    
+    -- Create test payment accounts (FIXED: Changed SETTLEMENT to MERCHANT)
     INSERT INTO ledgerr.payment_accounts (
         partner_id, external_account_id, account_holder_name, 
         account_type, gl_account_id, current_balance
     ) VALUES 
     (v_partner1_id, 'EXT_ACC_001', 'Test User 1', 'CHECKING', v_asset_gl_id, 1000.00),
-    (v_partner2_id, 'EXT_ACC_002', 'Test User 2', 'SAVINGS', v_liability_gl_id, 500.00);
+    (v_partner2_id, 'EXT_ACC_002', 'Test User 2', 'SAVINGS', v_liability_gl_id, 500.00),
+    (v_bank_partner_id, 'BANK_SETTLEMENT', 'Bank Settlement Account', 'MERCHANT', v_bank_settlement_gl_id, 100000.00);
     
     RAISE NOTICE 'Test data setup complete';
 END;
@@ -50,6 +58,7 @@ DECLARE
     v_balance2 DECIMAL(15,2);
     v_transaction_count INTEGER;
     v_journal_count INTEGER;
+    v_balance_record RECORD;
 BEGIN
     RAISE NOTICE 'Starting TEST 1: Basic Transfer';
     
@@ -60,31 +69,24 @@ BEGIN
     SELECT payment_account_id INTO v_account2_id
     FROM ledgerr.payment_accounts WHERE partner_id = v_partner2_id;
     
-    -- Execute transfer: $100 from account1 to account2
-    BEGIN
-        SET TRANSACTION ISOLATION LEVEL SERIALIZABLE;
-        
-        v_entry_id := ledgerr.process_payment_transaction(
-            v_partner1_id, v_account1_id,
-            v_partner2_id, v_account2_id, 
-            100.00,
-            'Test transfer between accounts',
-            'TEST_REF_001'
-        );
-        
-        COMMIT;
-    EXCEPTION
-        WHEN OTHERS THEN
-            ROLLBACK;
-            RAISE EXCEPTION 'Transfer failed: %', SQLERRM;
-    END;
+    -- Execute transfer: $100 from account1 to account2 (REMOVED EXPLICIT TRANSACTION MANAGEMENT)
+    v_entry_id := ledgerr.execute_transaction(
+        v_partner1_id, v_account1_id,
+        v_partner2_id, v_account2_id, 
+        100.00,
+        'TRANSFER',
+        'Test transfer between accounts',
+        'TEST_REF_001'
+    );
     
-    -- Verify balances
-    SELECT current_balance INTO v_balance1 
-    FROM ledgerr.payment_accounts WHERE partner_id = v_partner1_id;
+    -- Verify balances using the balance function
+    SELECT current_balance INTO v_balance_record
+    FROM ledgerr.get_payment_account_balance(v_partner1_id, v_account1_id);
+    v_balance1 := v_balance_record.current_balance;
     
-    SELECT current_balance INTO v_balance2
-    FROM ledgerr.payment_accounts WHERE partner_id = v_partner2_id;
+    SELECT current_balance INTO v_balance_record
+    FROM ledgerr.get_payment_account_balance(v_partner2_id, v_account2_id);
+    v_balance2 := v_balance_record.current_balance;
     
     -- Assertions
     IF v_balance1 != 900.00 THEN
@@ -119,7 +121,90 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- ============================================================================
--- TEST 2: Insufficient Funds (Error Case)
+-- TEST 2: Different Transaction Types
+-- ============================================================================
+CREATE OR REPLACE FUNCTION ledgerr.test_transaction_types()
+RETURNS void AS $$
+DECLARE
+    v_partner1_id UUID := '11111111-1111-1111-1111-111111111111';
+    v_bank_partner_id UUID := '99999999-9999-9999-9999-999999999999';
+    v_account1_id UUID;
+    v_settlement_account_id UUID;
+    v_entry_id UUID;
+    v_initial_balance DECIMAL(15,2);
+    v_final_balance DECIMAL(15,2);
+    v_deposit_count INTEGER;
+    v_purchase_count INTEGER;
+BEGIN
+    RAISE NOTICE 'Starting TEST 2: Different Transaction Types';
+    
+    -- Get account IDs
+    SELECT payment_account_id INTO v_account1_id 
+    FROM ledgerr.payment_accounts WHERE partner_id = v_partner1_id;
+    
+    SELECT payment_account_id INTO v_settlement_account_id
+    FROM ledgerr.payment_accounts WHERE partner_id = v_bank_partner_id;
+    
+    -- Get initial balance
+    SELECT current_balance INTO v_initial_balance
+    FROM ledgerr.payment_accounts WHERE partner_id = v_partner1_id;
+    
+    -- Test DEPOSIT transaction (REMOVED EXPLICIT TRANSACTION MANAGEMENT)
+    v_entry_id := ledgerr.execute_transaction(
+        v_bank_partner_id, v_settlement_account_id,
+        v_partner1_id, v_account1_id,
+        200.00,
+        'DEPOSIT',
+        'ACH deposit from employer',
+        'DEPOSIT_001'
+    );
+    
+    -- Test PURCHASE transaction  
+    v_entry_id := ledgerr.execute_transaction(
+        v_partner1_id, v_account1_id,
+        v_bank_partner_id, v_settlement_account_id,
+        50.00,
+        'PURCHASE',
+        'Coffee shop purchase',
+        'PURCHASE_001'
+    );
+    
+    -- Verify final balance (initial + 200 - 50 = initial + 150)
+    SELECT current_balance INTO v_final_balance
+    FROM ledgerr.payment_accounts WHERE partner_id = v_partner1_id;
+    
+    IF v_final_balance != (v_initial_balance + 150.00) THEN
+        RAISE EXCEPTION 'TEST 2 FAILED: Balance should be %, got %', 
+                       (v_initial_balance + 150.00), v_final_balance;
+    END IF;
+    
+    -- Verify transaction types were recorded correctly
+    SELECT COUNT(*) INTO v_deposit_count
+    FROM ledgerr.payment_account_transactions
+    WHERE partner_id = v_partner1_id 
+      AND transaction_type = 'DEPOSIT'
+      AND external_reference = 'DEPOSIT_001';
+    
+    SELECT COUNT(*) INTO v_purchase_count  
+    FROM ledgerr.payment_account_transactions
+    WHERE partner_id = v_partner1_id
+      AND transaction_type = 'PURCHASE' 
+      AND external_reference = 'PURCHASE_001';
+    
+    IF v_deposit_count != 1 THEN
+        RAISE EXCEPTION 'TEST 2 FAILED: Should have 1 DEPOSIT transaction, got %', v_deposit_count;
+    END IF;
+    
+    IF v_purchase_count != 1 THEN
+        RAISE EXCEPTION 'TEST 2 FAILED: Should have 1 PURCHASE transaction, got %', v_purchase_count;
+    END IF;
+    
+    RAISE NOTICE 'TEST 2 PASSED: Different transaction types work correctly';
+END;
+$$ LANGUAGE plpgsql;
+
+-- ============================================================================
+-- TEST 3: Insufficient Funds (Error Case)
 -- ============================================================================
 CREATE OR REPLACE FUNCTION ledgerr.test_insufficient_funds()
 RETURNS void AS $$
@@ -133,7 +218,7 @@ DECLARE
     v_balance1_after DECIMAL(15,2);
     v_error_occurred BOOLEAN := FALSE;
 BEGIN
-    RAISE NOTICE 'Starting TEST 2: Insufficient Funds';
+    RAISE NOTICE 'Starting TEST 3: Insufficient Funds';
     
     -- Get account IDs and initial balance
     SELECT payment_account_id, current_balance INTO v_account1_id, v_balance1_before
@@ -142,31 +227,27 @@ BEGIN
     SELECT payment_account_id INTO v_account2_id
     FROM ledgerr.payment_accounts WHERE partner_id = v_partner2_id;
     
-    -- Try to transfer more than available balance
+    -- Try to transfer more than available balance (REMOVED EXPLICIT TRANSACTION MANAGEMENT)
     BEGIN
-        SET TRANSACTION ISOLATION LEVEL SERIALIZABLE;
-        
-        v_entry_id := ledgerr.process_payment_transaction(
+        v_entry_id := ledgerr.execute_transaction(
             v_partner1_id, v_account1_id,
             v_partner2_id, v_account2_id,
-            2000.00, -- More than the 900.00 balance from previous test
+            5000.00, -- More than available balance
+            'TRANSFER',
             'Test insufficient funds',
-            'TEST_REF_002'
+            'TEST_REF_FAIL'
         );
         
-        COMMIT;
-        
         -- If we get here, the test failed
-        RAISE EXCEPTION 'TEST 2 FAILED: Transaction should have been rejected due to insufficient funds';
+        RAISE EXCEPTION 'TEST 3 FAILED: Transaction should have been rejected due to insufficient funds';
         
     EXCEPTION
         WHEN OTHERS THEN
-            ROLLBACK;
             IF SQLERRM LIKE '%Insufficient funds%' THEN
                 v_error_occurred := TRUE;
                 RAISE NOTICE 'Expected insufficient funds error caught: %', SQLERRM;
             ELSE
-                RAISE EXCEPTION 'TEST 2 FAILED: Unexpected error: %', SQLERRM;
+                RAISE EXCEPTION 'TEST 3 FAILED: Unexpected error: %', SQLERRM;
             END IF;
     END;
     
@@ -175,103 +256,132 @@ BEGIN
     FROM ledgerr.payment_accounts WHERE partner_id = v_partner1_id;
     
     IF v_balance1_after != v_balance1_before THEN
-        RAISE EXCEPTION 'TEST 2 FAILED: Balance should be unchanged after failed transaction. Before: %, After: %', 
+        RAISE EXCEPTION 'TEST 3 FAILED: Balance should be unchanged after failed transaction. Before: %, After: %', 
                        v_balance1_before, v_balance1_after;
     END IF;
     
     IF NOT v_error_occurred THEN
-        RAISE EXCEPTION 'TEST 2 FAILED: Expected insufficient funds error did not occur';
+        RAISE EXCEPTION 'TEST 3 FAILED: Expected insufficient funds error did not occur';
     END IF;
     
-    RAISE NOTICE 'TEST 2 PASSED: Insufficient funds properly rejected';
+    RAISE NOTICE 'TEST 3 PASSED: Insufficient funds properly rejected';
 END;
 $$ LANGUAGE plpgsql;
 
 -- ============================================================================
--- TEST 3: Concurrent Transaction Handling
+-- TEST 4: Reversal Functionality
 -- ============================================================================
-CREATE OR REPLACE FUNCTION ledgerr.test_concurrent_transactions()
+CREATE OR REPLACE FUNCTION ledgerr.test_reversal()
 RETURNS void AS $$
 DECLARE
     v_partner1_id UUID := '11111111-1111-1111-1111-111111111111';
     v_partner2_id UUID := '22222222-2222-2222-2222-222222222222';
     v_account1_id UUID;
     v_account2_id UUID;
-    v_initial_balance DECIMAL(15,2);
-    v_final_balance DECIMAL(15,2);
-    v_expected_balance DECIMAL(15,2);
-    v_transaction_count INTEGER;
+    v_original_entry_id UUID;
+    v_reversal_entry_id UUID;
+    v_balance1_before DECIMAL(15,2);
+    v_balance1_after DECIMAL(15,2);
+    v_balance2_before DECIMAL(15,2);
+    v_balance2_after DECIMAL(15,2);
 BEGIN
-    RAISE NOTICE 'Starting TEST 3: Concurrent Transaction Handling';
+    RAISE NOTICE 'Starting TEST 4: Reversal Functionality';
     
-    -- Get account info
-    SELECT payment_account_id, current_balance INTO v_account1_id, v_initial_balance
+    -- Get account IDs and balances before
+    SELECT payment_account_id, current_balance INTO v_account1_id, v_balance1_before
     FROM ledgerr.payment_accounts WHERE partner_id = v_partner1_id;
     
-    SELECT payment_account_id INTO v_account2_id
+    SELECT payment_account_id, current_balance INTO v_account2_id, v_balance2_before
     FROM ledgerr.payment_accounts WHERE partner_id = v_partner2_id;
     
-    -- Simulate multiple small transfers (this would normally be done in separate connections)
-    -- In production, you'd test this with multiple database connections
-    BEGIN
-        SET TRANSACTION ISOLATION LEVEL SERIALIZABLE;
-        
-        -- Transfer 1: $50
-        PERFORM ledgerr.process_payment_transaction(
-            v_partner1_id, v_account1_id,
-            v_partner2_id, v_account2_id,
-            50.00,
-            'Concurrent test transfer 1',
-            'CONCURRENT_001'
-        );
-        
-        -- Transfer 2: $25  
-        PERFORM ledgerr.process_payment_transaction(
-            v_partner1_id, v_account1_id,
-            v_partner2_id, v_account2_id,
-            25.00,
-            'Concurrent test transfer 2', 
-            'CONCURRENT_002'
-        );
-        
-        -- Transfer 3: $10
-        PERFORM ledgerr.process_payment_transaction(
-            v_partner1_id, v_account1_id,
-            v_partner2_id, v_account2_id,
-            10.00,
-            'Concurrent test transfer 3',
-            'CONCURRENT_003'
-        );
-        
-        COMMIT;
-    EXCEPTION
-        WHEN OTHERS THEN
-            ROLLBACK;
-            RAISE EXCEPTION 'TEST 3 FAILED: Concurrent transfers failed: %', SQLERRM;
-    END;
+    -- Execute original transaction (REMOVED EXPLICIT TRANSACTION MANAGEMENT)
+    v_original_entry_id := ledgerr.execute_transaction(
+        v_partner1_id, v_account1_id,
+        v_partner2_id, v_account2_id,
+        75.00,
+        'TRANSFER',
+        'Test transaction for reversal',
+        'REVERSAL_TEST_001'
+    );
     
-    -- Verify final balance
-    SELECT current_balance INTO v_final_balance
+    -- Create reversal
+    v_reversal_entry_id := ledgerr.create_reversal_entry(
+        v_original_entry_id,
+        CURRENT_DATE,
+        'Testing reversal functionality',
+        'test_user'
+    );
+    
+    -- Verify balances are back to original
+    SELECT current_balance INTO v_balance1_after
     FROM ledgerr.payment_accounts WHERE partner_id = v_partner1_id;
     
-    v_expected_balance := v_initial_balance - 85.00; -- 50 + 25 + 10
+    SELECT current_balance INTO v_balance2_after  
+    FROM ledgerr.payment_accounts WHERE partner_id = v_partner2_id;
     
-    IF v_final_balance != v_expected_balance THEN
-        RAISE EXCEPTION 'TEST 3 FAILED: Final balance should be %, got %', 
-                       v_expected_balance, v_final_balance;
+    IF v_balance1_after != v_balance1_before THEN
+        RAISE EXCEPTION 'TEST 4 FAILED: Account 1 balance should be restored to %, got %', 
+                       v_balance1_before, v_balance1_after;
     END IF;
     
-    -- Verify all transactions were recorded
-    SELECT COUNT(*) INTO v_transaction_count
-    FROM ledgerr.payment_account_transactions
-    WHERE partner_id = v_partner1_id
-      AND external_reference LIKE 'CONCURRENT_%';
-    
-    IF v_transaction_count != 3 THEN
-        RAISE EXCEPTION 'TEST 3 FAILED: Should have 3 transaction records, got %', v_transaction_count;
+    IF v_balance2_after != v_balance2_before THEN
+        RAISE EXCEPTION 'TEST 4 FAILED: Account 2 balance should be restored to %, got %',
+                       v_balance2_before, v_balance2_after;
     END IF;
     
-    RAISE NOTICE 'TEST 3 PASSED: Concurrent transactions handled correctly';
+    -- Verify original entry is marked as reversed
+    IF NOT EXISTS (
+        SELECT 1 FROM ledgerr.journal_entries 
+        WHERE entry_id = v_original_entry_id 
+          AND entry_date = CURRENT_DATE
+          AND is_reversed = TRUE
+    ) THEN
+        RAISE EXCEPTION 'TEST 4 FAILED: Original entry should be marked as reversed';
+    END IF;
+    
+    RAISE NOTICE 'TEST 4 PASSED: Reversal functionality works correctly';
+END;
+$$ LANGUAGE plpgsql;
+
+-- ============================================================================
+-- TEST 5: GL Account Balance Inquiry (Updated)
+-- ============================================================================
+CREATE OR REPLACE FUNCTION ledgerr.test_gl_balance_inquiry()
+RETURNS void AS $$
+DECLARE
+    v_gl_account_id UUID;
+    v_balance_record RECORD;
+    v_expected_transaction_count BIGINT;
+BEGIN
+    RAISE NOTICE 'Starting TEST 5: GL Account Balance Inquiry';
+    
+    -- Get a GL account that should have transactions (updated account code)
+    SELECT gl_account_id INTO v_gl_account_id
+    FROM ledgerr.gl_accounts 
+    WHERE account_code = 'TST_ASSET'
+    LIMIT 1;
+    
+    -- Test GL balance function
+    SELECT * INTO v_balance_record
+    FROM ledgerr.get_gl_account_balance(v_gl_account_id, CURRENT_DATE);
+    
+    -- Basic validation that function returns data
+    IF v_balance_record.account_balance IS NULL THEN
+        RAISE EXCEPTION 'TEST 5 FAILED: GL balance function should return a balance';
+    END IF;
+    
+    IF v_balance_record.transaction_count < 0 THEN
+        RAISE EXCEPTION 'TEST 5 FAILED: Transaction count should be non-negative, got %', 
+                       v_balance_record.transaction_count;
+    END IF;
+    
+    -- Verify that debits minus credits equals account balance
+    IF v_balance_record.account_balance != (v_balance_record.total_debits - v_balance_record.total_credits) THEN
+        RAISE EXCEPTION 'TEST 5 FAILED: Account balance should equal debits minus credits';
+    END IF;
+    
+    RAISE NOTICE 'TEST 5 PASSED: GL balance inquiry works correctly. Balance: %, Transactions: %', 
+                 v_balance_record.account_balance, v_balance_record.transaction_count;
 END;
 $$ LANGUAGE plpgsql;
 
@@ -282,7 +392,7 @@ CREATE OR REPLACE FUNCTION ledgerr.run_all_tests()
 RETURNS void AS $$
 BEGIN
     RAISE NOTICE '========================================';
-    RAISE NOTICE 'RUNNING LEDGER UNIT TESTS';
+    RAISE NOTICE 'RUNNING UPDATED LEDGER UNIT TESTS';
     RAISE NOTICE '========================================';
     
     -- Setup test data
@@ -290,8 +400,10 @@ BEGIN
     
     -- Run tests
     PERFORM ledgerr.test_basic_transfer();
+    PERFORM ledgerr.test_transaction_types();
     PERFORM ledgerr.test_insufficient_funds();
-    PERFORM ledgerr.test_concurrent_transactions();
+    PERFORM ledgerr.test_reversal();
+    PERFORM ledgerr.test_gl_balance_inquiry();
     
     RAISE NOTICE '========================================';
     RAISE NOTICE 'ALL TESTS PASSED!';
@@ -302,3 +414,74 @@ EXCEPTION
         RAISE EXCEPTION 'TEST SUITE FAILED: %', SQLERRM;
 END;
 $$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION ledgerr.test_basic_transfer_debug()
+RETURNS void AS $$
+DECLARE
+    v_partner1_id UUID := '11111111-1111-1111-1111-111111111111';
+    v_partner2_id UUID := '22222222-2222-2222-2222-222222222222';
+    v_account1_id UUID;
+    v_account2_id UUID;
+    v_entry_id UUID;
+    v_balance1 DECIMAL(15,2);
+    v_balance2 DECIMAL(15,2);
+BEGIN
+    RAISE NOTICE 'Starting DEBUG TEST: Basic Transfer';
+    
+    -- Get account IDs
+    SELECT payment_account_id INTO v_account1_id 
+    FROM ledgerr.payment_accounts WHERE partner_id = v_partner1_id;
+    
+    SELECT payment_account_id INTO v_account2_id
+    FROM ledgerr.payment_accounts WHERE partner_id = v_partner2_id;
+    
+    RAISE NOTICE 'Account 1 ID: %', v_account1_id;
+    RAISE NOTICE 'Account 2 ID: %', v_account2_id;
+    
+    -- Check if accounts exist
+    IF v_account1_id IS NULL THEN
+        RAISE EXCEPTION 'Account 1 not found for partner %', v_partner1_id;
+    END IF;
+    
+    IF v_account2_id IS NULL THEN
+        RAISE EXCEPTION 'Account 2 not found for partner %', v_partner2_id;
+    END IF;
+    
+    -- Execute transfer with debug info
+    BEGIN
+        RAISE NOTICE 'About to execute transaction...';
+        
+        v_entry_id := ledgerr.execute_transaction(
+            v_partner1_id, v_account1_id,
+            v_partner2_id, v_account2_id, 
+            100.00,
+            'TRANSFER',
+            'Test transfer between accounts',
+            'TEST_REF_001'
+        );
+        
+        RAISE NOTICE 'Transaction executed. Entry ID: %', v_entry_id;
+        
+        -- Check if entry_id is NULL
+        IF v_entry_id IS NULL THEN
+            RAISE EXCEPTION 'execute_transaction returned NULL entry_id';
+        END IF;
+        
+    EXCEPTION
+        WHEN OTHERS THEN
+            RAISE EXCEPTION 'Transfer failed: %', SQLERRM;
+    END;
+    
+    RAISE NOTICE 'DEBUG TEST completed successfully';
+END;
+$$ LANGUAGE plpgsql;
+
+-- Run all tests
+BEGIN;
+    SET TRANSACTION ISOLATION LEVEL SERIALIZABLE;
+    DO $$
+    BEGIN
+        PERFORM ledgerr.run_all_tests();
+    END;
+    $$ LANGUAGE plpgsql;
+COMMIT;
