@@ -1,5 +1,8 @@
+-- Create test schema
+CREATE SCHEMA IF NOT EXISTS ledgerr_test;
+
 -- Test setup function
-CREATE OR REPLACE FUNCTION ledgerr.setup_test_data()
+CREATE OR REPLACE FUNCTION ledgerr_test.setup_test_data()
 RETURNS void AS $$
 DECLARE
     v_asset_gl_id UUID;
@@ -53,7 +56,7 @@ $$ LANGUAGE plpgsql;
 -- ============================================================================
 -- TEST 1: Basic Account Transfer (Happy Path)
 -- ============================================================================
-CREATE OR REPLACE FUNCTION ledgerr.test_basic_transfer()
+CREATE OR REPLACE FUNCTION ledgerr_test.test_basic_transfer()
 RETURNS void AS $$
 DECLARE
     v_partner1_id UUID := '11111111-1111-1111-1111-111111111111';
@@ -128,7 +131,7 @@ $$ LANGUAGE plpgsql;
 -- ============================================================================
 -- TEST 2: Different Transaction Types
 -- ============================================================================
-CREATE OR REPLACE FUNCTION ledgerr.test_transaction_types()
+CREATE OR REPLACE FUNCTION ledgerr_test.test_transaction_types()
 RETURNS void AS $$
 DECLARE
     v_partner1_id UUID := '11111111-1111-1111-1111-111111111111';
@@ -211,7 +214,7 @@ $$ LANGUAGE plpgsql;
 -- ============================================================================
 -- TEST 3: Insufficient Funds (Error Case)
 -- ============================================================================
-CREATE OR REPLACE FUNCTION ledgerr.test_insufficient_funds()
+CREATE OR REPLACE FUNCTION ledgerr_test.test_insufficient_funds()
 RETURNS void AS $$
 DECLARE
     v_partner1_id UUID := '11111111-1111-1111-1111-111111111111';
@@ -276,7 +279,7 @@ $$ LANGUAGE plpgsql;
 -- ============================================================================
 -- TEST 4: Reversal Functionality
 -- ============================================================================
-CREATE OR REPLACE FUNCTION ledgerr.test_reversal()
+CREATE OR REPLACE FUNCTION ledgerr_test.test_reversal()
 RETURNS void AS $$
 DECLARE
     v_partner1_id UUID := '11111111-1111-1111-1111-111111111111';
@@ -351,7 +354,7 @@ $$ LANGUAGE plpgsql;
 -- ============================================================================
 -- TEST 5: GL Account Balance Inquiry
 -- ============================================================================
-CREATE OR REPLACE FUNCTION ledgerr.test_gl_balance_inquiry()
+CREATE OR REPLACE FUNCTION ledgerr_test.test_gl_balance_inquiry()
 RETURNS void AS $$
 DECLARE
     v_gl_account_id UUID;
@@ -393,7 +396,7 @@ $$ LANGUAGE plpgsql;
 -- ============================================================================
 -- TEST RUNNER
 -- ============================================================================
-CREATE OR REPLACE FUNCTION ledgerr.run_all_tests()
+CREATE OR REPLACE FUNCTION ledgerr_test.run_all_tests()
 RETURNS void AS $$
 DECLARE
     v_error_message TEXT;
@@ -410,32 +413,32 @@ BEGIN
     BEGIN
         v_test_name := 'SETUP';
         RAISE NOTICE 'Running: %', v_test_name;
-        PERFORM ledgerr.setup_test_data();
+        PERFORM ledgerr_test.setup_test_data();
         RAISE NOTICE 'COMPLETED: %', v_test_name;
 
         v_test_name := 'TEST 1: Basic Transfer';
         RAISE NOTICE 'Running: %', v_test_name;
-        PERFORM ledgerr.test_basic_transfer();
+        PERFORM ledgerr_test.test_basic_transfer();
         RAISE NOTICE 'COMPLETED: %', v_test_name;
 
         v_test_name := 'TEST 2: Transaction Types';
         RAISE NOTICE 'Running: %', v_test_name;
-        PERFORM ledgerr.test_transaction_types();
+        PERFORM ledgerr_test.test_transaction_types();
         RAISE NOTICE 'COMPLETED: %', v_test_name;
 
         v_test_name := 'TEST 3: Insufficient Funds';
         RAISE NOTICE 'Running: %', v_test_name;
-        PERFORM ledgerr.test_insufficient_funds();
+        PERFORM ledgerr_test.test_insufficient_funds();
         RAISE NOTICE 'COMPLETED: %', v_test_name;
 
         v_test_name := 'TEST 4: Reversal';
         RAISE NOTICE 'Running: %', v_test_name;
-        PERFORM ledgerr.test_reversal();
+        PERFORM ledgerr_test.test_reversal();
         RAISE NOTICE 'COMPLETED: %', v_test_name;
 
         v_test_name := 'TEST 5: GL Balance';
         RAISE NOTICE 'Running: %', v_test_name;
-        PERFORM ledgerr.test_gl_balance_inquiry();
+        PERFORM ledgerr_test.test_gl_balance_inquiry();
         RAISE NOTICE 'COMPLETED: %', v_test_name;
 
     EXCEPTION
@@ -463,7 +466,7 @@ BEGIN;
     SET TRANSACTION ISOLATION LEVEL SERIALIZABLE;
     DO $$
     BEGIN
-        PERFORM ledgerr.run_all_tests();
+        PERFORM ledgerr_test.run_all_tests();
     END;
     $$ LANGUAGE plpgsql;
 COMMIT;

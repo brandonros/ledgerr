@@ -4,7 +4,7 @@ CREATE OR REPLACE FUNCTION ledgerr.execute_transaction(
     p_to_partner_id UUID,
     p_to_payment_account_id UUID,
     p_amount DECIMAL(15,2),
-    p_transaction_type VARCHAR(20), -- NEW: Required parameter
+    p_transaction_type VARCHAR(20),
     p_description TEXT,
     p_external_reference VARCHAR(50) DEFAULT NULL
 ) RETURNS UUID AS $$
