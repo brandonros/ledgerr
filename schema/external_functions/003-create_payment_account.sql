@@ -16,8 +16,8 @@ BEGIN
     v_payment_account_id := COALESCE(p_payment_account_id, gen_random_uuid());
 
     -- Validate account type
-    IF p_account_type NOT IN ('CHECKING', 'SAVINGS', 'PREPAID', 'MERCHANT') THEN
-        RAISE EXCEPTION 'Invalid account type: %. Must be one of: CHECKING, SAVINGS, PREPAID, MERCHANT', p_account_type;
+    IF p_account_type NOT IN ('CHECKING', 'SAVINGS', 'PREPAID', 'MERCHANT', 'CAPITAL') THEN
+        RAISE EXCEPTION 'Invalid account type: %. Must be one of: CHECKING, SAVINGS, PREPAID, MERCHANT, CAPITAL', p_account_type;
     END IF;
     
     -- Validate risk level

@@ -5,7 +5,7 @@ CREATE TABLE IF NOT EXISTS ledgerr.payment_accounts (
     
     -- Account details
     account_holder_name VARCHAR(100) NOT NULL,
-    account_type VARCHAR(20) NOT NULL CHECK (account_type IN ('CHECKING', 'SAVINGS', 'PREPAID', 'MERCHANT')),
+    account_type VARCHAR(20) NOT NULL CHECK (account_type IN ('CHECKING', 'SAVINGS', 'PREPAID', 'MERCHANT', 'CAPITAL')),
     gl_account_id UUID NOT NULL REFERENCES ledgerr.gl_accounts(gl_account_id),
     
     -- Embedded balances
