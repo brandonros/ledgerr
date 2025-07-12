@@ -22,20 +22,6 @@ echo "========================================================="
 TEST_RUN_ID=$(date +%s)
 echo "Test Run ID: $TEST_RUN_ID"
 
-# Clean slate with error checking
-echo "Cleaning up existing test data..."
-if ! psql "$DATABASE_URL" -c "DELETE FROM ledgerr.journal_entry_lines;" 2>/dev/null; then
-    echo -e "${RED}Warning: Could not clean journal_entry_lines${NC}"
-fi
-
-if ! psql "$DATABASE_URL" -c "DELETE FROM ledgerr.journal_entries;" 2>/dev/null; then
-    echo -e "${RED}Warning: Could not clean journal_entries${NC}"
-fi
-
-if ! psql "$DATABASE_URL" -c "DELETE FROM ledgerr.accounts;" 2>/dev/null; then
-    echo -e "${RED}Warning: Could not clean accounts${NC}"
-fi
-
 # Generate new test account UUIDs that won't conflict
 ASSET_CASH="10000000-0000-0000-0000-000000000000"
 ASSET_RECEIVABLE="20000000-0000-0000-0000-000000000000"
@@ -451,6 +437,28 @@ test_global_balance() {
     fi
 }
 
+cleanup_test_data() {
+    echo "Cleaning up existing test data..."
+    if ! psql "$DATABASE_URL" -c "DELETE FROM ledgerr.journal_entry_lines;" 2>/dev/null; then
+        echo -e "${RED}Warning: Could not clean journal_entry_lines${NC}"
+    fi
+
+    if ! psql "$DATABASE_URL" -c "DELETE FROM ledgerr.journal_entries;" 2>/dev/null; then
+        echo -e "${RED}Warning: Could not clean journal_entries${NC}"
+    fi
+
+    if ! psql "$DATABASE_URL" -c "DELETE FROM ledgerr.accounts;" 2>/dev/null; then
+        echo -e "${RED}Warning: Could not clean accounts${NC}"
+    fi
+
+    if ! psql "$DATABASE_URL" -c "DELETE FROM ledgerr.audit_log;" 2>/dev/null; then
+        echo -e "${RED}Warning: Could not clean audit_log${NC}"
+    fi
+}
+
+# Run cleanup
+cleanup_test_data
+
 # Setup test accounts with error checking
 echo "Setting up test chart of accounts..."
 
@@ -512,6 +520,9 @@ run_test "Global Balance Consistency Check" "test_global_balance"
 
 # Clean up temporary files
 rm -f /tmp/last_entry_id_*
+
+# Run cleanup
+cleanup_test_data
 
 echo ""
 echo "🏆 FINAL RESULTS"
