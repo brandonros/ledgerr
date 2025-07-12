@@ -145,6 +145,22 @@ curl -s --request POST \
   }" | jq '.'
 
 echo ""
+echo "💰 Step 4: Funding Bank Cash Account"
+echo "------------------------------------"
+
+# 9. Fund the bank's cash account using balance adjustment (proper accounting way)
+echo "Funding Bank Operating Cash Account with initial balance..."
+curl -s --request POST \
+  --url "$BASE_URL/rpc/create_balance_adjustment" \
+  --header "$CONTENT_TYPE" \
+  --data "{
+    \"p_gl_account_id\": \"$GL_BANK_CASH\",
+    \"p_amount\": 100000.00,
+    \"p_description\": \"Initial bank operating cash funding\",
+    \"p_external_reference\": \"BANK-INIT-001\"
+  }" | jq '.'
+
+echo ""
 echo "✅ Setup Complete! Here are your test UUIDs:"
 echo "============================================="
 echo "GL Accounts:"
@@ -164,7 +180,7 @@ echo ""
 echo "🚀 Ready for transaction testing!"
 echo ""
 echo "Sample transaction test:"
-echo "# Deposit \$100 into customer account (from external funding source)"
+echo "# Deposit \$100 into customer account (from bank cash)"
 echo "curl --request POST \\"
 echo "  --url $BASE_URL/rpc/execute_transaction \\"
 echo "  --header '$CONTENT_TYPE' \\"
@@ -178,3 +194,4 @@ echo "    \"p_transaction_type\": \"DEPOSIT\","
 echo "    \"p_description\": \"Initial customer deposit\","
 echo "    \"p_external_reference\": \"EXT-DEP-001\""
 echo "  }'"
+echo ""
