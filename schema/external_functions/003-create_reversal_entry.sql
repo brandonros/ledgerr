@@ -1,4 +1,4 @@
-CREATE OR REPLACE FUNCTION ledgerr.create_reversal_entry(
+CREATE OR REPLACE FUNCTION ledgerr_api.create_reversal_entry(
     p_original_entry_id UUID,
     p_original_entry_date DATE,
     p_reversal_reason TEXT,
@@ -51,7 +51,7 @@ BEGIN
         WHERE entry_id = p_original_entry_id AND entry_date = p_original_entry_date
     LOOP
         INSERT INTO ledgerr.journal_entry_lines (
-            entry_date, entry_id, gl_account_id, 
+            entry_date, entry_id, account_id, 
             debit_amount, credit_amount, description,
             external_account_id, payment_id, payment_type,
             dempotency_key, payment_network, settlement_date,
@@ -59,7 +59,7 @@ BEGIN
         ) VALUES (
             CURRENT_DATE,
             v_reversal_entry_id,
-            v_line.gl_account_id,
+            v_line.account_id,
             v_line.credit_amount,  -- Flip: original credit becomes debit
             v_line.debit_amount,   -- Flip: original debit becomes credit
             'REVERSAL: ' || v_line.description,
@@ -72,28 +72,6 @@ BEGIN
             v_line.external_reference,
             -v_line.processing_fee  -- Reverse the fee
         ) RETURNING line_id INTO v_reversal_line_id;
-        
-        -- CRITICAL FIX: Create corresponding payment account transactions for the reversal
-        -- Find the original payment account transaction for this journal line
-        FOR v_transaction IN
-            SELECT * FROM ledgerr.payment_account_transactions
-            WHERE journal_entry_id = p_original_entry_id 
-              AND journal_line_id = v_line.line_id
-              AND entry_date = p_original_entry_date
-        LOOP
-            -- Create the reversal payment account transaction (flip the amount)
-            PERFORM ledgerr.create_payment_account_transaction(
-                v_transaction.partner_id,
-                v_transaction.payment_account_id,
-                -v_transaction.amount,  -- Flip the amount to reverse it
-                'REVERSAL',
-                v_reversal_entry_id,
-                v_reversal_line_id,
-                CURRENT_DATE,
-                'REVERSAL: ' || v_transaction.description,
-                'REV-' || COALESCE(v_transaction.external_reference, '')
-            );
-        END LOOP;
     END LOOP;
     
     -- Mark original entry as reversed
@@ -105,4 +83,5 @@ BEGIN
     
     RETURN v_reversal_entry_id;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SECURITY DEFINER VOLATILE
+SET default_transaction_isolation TO 'serializable';

@@ -1,4 +1,4 @@
-CREATE OR REPLACE FUNCTION ledgerr.record_journal_entry(
+CREATE OR REPLACE FUNCTION ledgerr_api.record_journal_entry(
     p_entry_date DATE,
     p_description TEXT,
     p_journal_lines JSONB,
@@ -10,7 +10,7 @@ DECLARE
     v_total_debits DECIMAL(15,2) := 0;
     v_total_credits DECIMAL(15,2) := 0;
     v_line JSONB;
-    v_gl_account_id UUID;
+    v_account_id UUID;
     v_debit_amount DECIMAL(15,2);
     v_credit_amount DECIMAL(15,2);
     v_line_description TEXT;
@@ -44,14 +44,14 @@ BEGIN
     FOR v_line IN SELECT * FROM jsonb_array_elements(p_journal_lines)
     LOOP
         -- Extract values from JSON
-        v_gl_account_id := (v_line->>'gl_account_id')::UUID;
+        v_account_id := (v_line->>'account_id')::UUID;
         v_debit_amount := COALESCE((v_line->>'debit_amount')::DECIMAL(15,2), 0);
         v_credit_amount := COALESCE((v_line->>'credit_amount')::DECIMAL(15,2), 0);
         v_line_description := v_line->>'description';
         
         -- Validate account exists - Fixed reference
-        IF NOT EXISTS (SELECT 1 FROM ledgerr.gl_accounts WHERE gl_account_id = v_gl_account_id AND is_active = TRUE) THEN
-            RAISE EXCEPTION 'GL Account ID % does not exist or is inactive', v_gl_account_id;
+        IF NOT EXISTS (SELECT 1 FROM ledgerr.accounts WHERE account_id = v_account_id AND is_active = TRUE) THEN
+            RAISE EXCEPTION 'Account ID % does not exist or is inactive', v_account_id;
         END IF;
         
         -- Validate that exactly one of debit or credit is provided
@@ -60,8 +60,8 @@ BEGIN
         END IF;
         
         -- Insert journal entry line
-        INSERT INTO ledgerr.journal_entry_lines (entry_id, entry_date, gl_account_id, debit_amount, credit_amount, description)
-        VALUES (v_entry_id, p_entry_date, v_gl_account_id, v_debit_amount, v_credit_amount, v_line_description);
+        INSERT INTO ledgerr.journal_entry_lines (entry_id, entry_date, account_id, debit_amount, credit_amount, description)
+        VALUES (v_entry_id, p_entry_date, v_account_id, v_debit_amount, v_credit_amount, v_line_description);
         
         -- Add to totals
         v_total_debits := v_total_debits + v_debit_amount;
@@ -81,4 +81,5 @@ BEGIN
     
     RETURN v_entry_id;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SECURITY DEFINER VOLATILE
+SET default_transaction_isolation TO 'serializable';

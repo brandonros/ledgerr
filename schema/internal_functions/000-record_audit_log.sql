@@ -4,15 +4,24 @@ DECLARE
     v_record_id TEXT;
     v_old_record JSONB;
     v_new_record JSONB;
+    v_base_table_name TEXT;
 BEGIN
-    -- Determine the primary key value dynamically
-    CASE TG_TABLE_NAME
-        WHEN 'gl_accounts' THEN v_record_id := COALESCE(NEW.gl_account_id, OLD.gl_account_id)::TEXT;
-        WHEN 'payment_accounts' THEN v_record_id := COALESCE(NEW.payment_account_id, OLD.payment_account_id)::TEXT;
-        WHEN 'payment_account_transactions' THEN v_record_id := COALESCE(NEW.transaction_id, OLD.transaction_id)::TEXT;
+    -- Extract base table name from partition name
+    -- This handles cases like 'journal_entries_2025_07' -> 'journal_entries'
+    v_base_table_name := CASE 
+        WHEN TG_TABLE_NAME LIKE 'accounts_%' THEN 'accounts'
+        WHEN TG_TABLE_NAME LIKE 'journal_entries_%' THEN 'journal_entries'
+        WHEN TG_TABLE_NAME LIKE 'journal_entry_lines_%' THEN 'journal_entry_lines'
+        ELSE TG_TABLE_NAME
+    END;
+    
+    -- Determine the primary key value dynamically based on base table name
+    CASE v_base_table_name
+        WHEN 'accounts' THEN v_record_id := COALESCE(NEW.account_id, OLD.account_id)::TEXT;
         WHEN 'journal_entries' THEN v_record_id := COALESCE(NEW.entry_id, OLD.entry_id)::TEXT;
         WHEN 'journal_entry_lines' THEN v_record_id := COALESCE(NEW.line_id, OLD.line_id)::TEXT;
-        ELSE v_record_id := 'unknown';
+        ELSE 
+            RAISE EXCEPTION 'Audit trigger not configured for table: % (base: %)', TG_TABLE_NAME, v_base_table_name;
     END CASE;
     
     -- Handle different operation types
@@ -41,7 +50,7 @@ BEGIN
         session_id
     ) VALUES (
         TG_OP, 
-        TG_TABLE_NAME, 
+        TG_TABLE_NAME, -- Keep the actual partition name for traceability
         v_record_id,
         v_old_record,
         v_new_record,

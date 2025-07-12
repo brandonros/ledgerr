@@ -29,7 +29,6 @@ DIRECTORIES=(
     "tables" 
     "internal_functions"
     "external_functions"
-    "utilities"
     "triggers"
     "partitions"
 )
