@@ -2,27 +2,27 @@ import http from 'k6/http';
 import { check } from 'k6';
 import { randomString } from 'https://jslib.k6.io/k6-utils/1.2.0/index.js';
 
-// Test configuration
+// Test configuration - 2x scaled workload
 export const options = {
   scenarios: {
-    // 70% reads (balance checks) - 70 TPS
+    // 70% reads (balance checks) - 140 TPS (doubled from 70)
     balance_reads: {
       executor: 'constant-arrival-rate',
-      rate: 70,
+      rate: 140,
       timeUnit: '1s',
-      duration: '5m',
-      preAllocatedVUs: 10,
-      maxVUs: 20,
+      duration: '60s',
+      preAllocatedVUs: 20,  // Doubled from 10
+      maxVUs: 40,           // Doubled from 20
       exec: 'getBalance',
     },
-    // 30% writes (transactions) - 30 TPS
+    // 30% writes (transactions) - 60 TPS (doubled from 30)
     transaction_writes: {
       executor: 'constant-arrival-rate',
-      rate: 30,
+      rate: 60,
       timeUnit: '1s',
-      duration: '5m',
-      preAllocatedVUs: 5,
-      maxVUs: 10,
+      duration: '60s',
+      preAllocatedVUs: 10,  // Doubled from 5
+      maxVUs: 20,           // Doubled from 10
       exec: 'createTransaction',
     },
   },

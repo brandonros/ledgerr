@@ -1,5 +1,5 @@
 CREATE TABLE IF NOT EXISTS ledgerr.audit_log (
-    log_id SERIAL,
+    log_id UUID DEFAULT uuid_generate_v4(),
     event_type VARCHAR(50) NOT NULL,
     table_name VARCHAR(50) NOT NULL,
     record_id TEXT NOT NULL,
