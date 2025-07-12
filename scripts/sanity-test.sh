@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# Fixed Core Double-Entry Ledger Test Suite
-# Focus: Proving fundamental accounting correctness and scalability
+# Enhanced Double-Entry Ledger Test Suite with Idempotency
+# Focus: Proving fundamental accounting correctness, scalability, and idempotency
 
 set -e
 
@@ -15,8 +15,12 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
-echo "🔬 FIXED LEDGER VALIDATION TEST SUITE"
-echo "===================================="
+echo "🔬 ENHANCED LEDGER VALIDATION TEST SUITE WITH IDEMPOTENCY"
+echo "========================================================="
+
+# Generate a unique test run ID for idempotency keys
+TEST_RUN_ID=$(date +%s)
+echo "Test Run ID: $TEST_RUN_ID"
 
 # Clean slate with error checking
 echo "Cleaning up existing test data..."
@@ -69,6 +73,13 @@ run_test() {
         FAILED_TESTS=$((FAILED_TESTS + 1))
     fi
     echo ""
+}
+
+# Generate unique idempotency key for each test
+generate_idempotency_key() {
+    local test_name="$1"
+    local sequence="$2"
+    echo "TEST-${TEST_RUN_ID}-${test_name}-${sequence}"
 }
 
 create_test_account() {
@@ -134,12 +145,12 @@ get_balance() {
 }
 
 record_journal_entry() {
-    local idempotency_key="$1"
-    local description="$2"
-    local reference="$3"
-    local lines="$4"
+    local description="$1"
+    local reference="$2"
+    local lines="$3"
+    local idempotency_key="$4"
     
-    echo "Recording journal entry: $description"
+    echo "Recording journal entry: $description (key: $idempotency_key)"
     
     local response=$(curl -s -w "%{http_code}" --request POST \
         --url "$BASE_URL/rpc/record_journal_entry" \
@@ -162,8 +173,50 @@ record_journal_entry() {
         return 1
     fi
     
-    echo -e "${GREEN}✅ Journal entry recorded${NC}"
+    # Extract the entry ID from the response for verification
+    local entry_id
+    if command -v jq >/dev/null 2>&1; then
+        entry_id=$(echo "$response_body" | jq -r '.')
+    else
+        entry_id=$(echo "$response_body" | tr -d '"')
+    fi
+    
+    echo -e "${GREEN}✅ Journal entry recorded with ID: $entry_id${NC}"
+    # Store the entry ID for later verification
+    echo "$entry_id" > "/tmp/last_entry_id_${idempotency_key}"
     return 0
+}
+
+# Enhanced function to test idempotency specifically
+record_journal_entry_with_retry() {
+    local description="$1"
+    local reference="$2"
+    local lines="$3"
+    local idempotency_key="$4"
+    
+    echo "Testing idempotency: Recording entry twice with same key"
+    
+    # First call
+    if ! record_journal_entry "$description" "$reference" "$lines" "$idempotency_key"; then
+        return 1
+    fi
+    
+    local first_entry_id=$(cat "/tmp/last_entry_id_${idempotency_key}")
+    
+    # Second call with same idempotency key - should return same entry ID
+    if ! record_journal_entry "$description (retry)" "$reference" "$lines" "$idempotency_key"; then
+        return 1
+    fi
+    
+    local second_entry_id=$(cat "/tmp/last_entry_id_${idempotency_key}")
+    
+    if [[ "$first_entry_id" == "$second_entry_id" ]]; then
+        echo -e "${GREEN}✅ Idempotency verified: Same entry ID returned ($first_entry_id)${NC}"
+        return 0
+    else
+        echo -e "${RED}❌ Idempotency failed: Different entry IDs ($first_entry_id vs $second_entry_id)${NC}"
+        return 1
+    fi
 }
 
 assert_balance() {
@@ -189,13 +242,15 @@ assert_balance() {
     fi
 }
 
-# Test functions - these replace the inline eval strings
+# Test functions with idempotency
 test_double_entry() {
+    local idempotency_key=$(generate_idempotency_key "DOUBLE_ENTRY" "001")
+    
     # Record a balanced transaction
-    record_journal_entry 'TEST-001' 'Test balanced entry' 'TEST-001' "[
+    record_journal_entry 'Test balanced entry' 'TEST-001' "[
         {\"account_id\": \"$ASSET_CASH\", \"debit_amount\": 1000.00, \"credit_amount\": 0, \"description\": \"Cash increase\"},
         {\"account_id\": \"$EQUITY_CAPITAL\", \"debit_amount\": 0, \"credit_amount\": 1000.00, \"description\": \"Capital investment\"}
-    ]" || return 1
+    ]" "$idempotency_key" || return 1
     
     assert_balance "$ASSET_CASH" '1000.00' || return 1
     assert_balance "$EQUITY_CAPITAL" '-1000.00' || return 1
@@ -204,12 +259,14 @@ test_double_entry() {
 }
 
 test_zero_sum() {
-    record_journal_entry 'TEST-002' 'Complex multi-line entry' 'TEST-002' "[
+    local idempotency_key=$(generate_idempotency_key "ZERO_SUM" "002")
+    
+    record_journal_entry 'Complex multi-line entry' 'TEST-002' "[
         {\"account_id\": \"$ASSET_CASH\", \"debit_amount\": 500.00, \"credit_amount\": 0, \"description\": \"Cash in\"},
         {\"account_id\": \"$ASSET_RECEIVABLE\", \"debit_amount\": 300.00, \"credit_amount\": 0, \"description\": \"Receivable increase\"},
         {\"account_id\": \"$LIABILITY_PAYABLE\", \"debit_amount\": 0, \"credit_amount\": 200.00, \"description\": \"Payable increase\"},
         {\"account_id\": \"$REVENUE_FEES\", \"debit_amount\": 0, \"credit_amount\": 600.00, \"description\": \"Fee revenue\"}
-    ]" || return 1
+    ]" "$idempotency_key" || return 1
     
     assert_balance "$ASSET_CASH" '1500.00' || return 1
     assert_balance "$ASSET_RECEIVABLE" '300.00' || return 1
@@ -217,6 +274,106 @@ test_zero_sum() {
     assert_balance "$REVENUE_FEES" '-600.00' || return 1
     
     return 0
+}
+
+test_idempotency_basic() {
+    local idempotency_key=$(generate_idempotency_key "IDEMPOTENCY_BASIC" "003")
+    
+    # Test idempotency with a simple transaction
+    record_journal_entry_with_retry 'Idempotency test transaction' 'TEST-003' "[
+        {\"account_id\": \"$ASSET_CASH\", \"debit_amount\": 100.00, \"credit_amount\": 0, \"description\": \"Cash increase\"},
+        {\"account_id\": \"$REVENUE_FEES\", \"debit_amount\": 0, \"credit_amount\": 100.00, \"description\": \"Fee revenue\"}
+    ]" "$idempotency_key" || return 1
+    
+    # Verify balances are correct (should only be applied once)
+    assert_balance "$ASSET_CASH" '1600.00' || return 1  # Previous balance + 100
+    assert_balance "$REVENUE_FEES" '-700.00' || return 1  # Previous balance - 100
+    
+    return 0
+}
+
+test_idempotency_concurrent() {
+    local idempotency_key=$(generate_idempotency_key "IDEMPOTENCY_CONCURRENT" "004")
+    
+    echo "Testing concurrent idempotency (simulated)"
+    
+    # Record initial balances
+    local initial_cash=$(get_balance "$ASSET_CASH")
+    local initial_revenue=$(get_balance "$REVENUE_FEES")
+    
+    # Submit the same transaction multiple times in quick succession
+    local pids=()
+    for i in {1..3}; do
+        (
+            record_journal_entry "Concurrent test transaction $i" "TEST-004-$i" "[
+                {\"account_id\": \"$ASSET_CASH\", \"debit_amount\": 50.00, \"credit_amount\": 0, \"description\": \"Cash increase\"},
+                {\"account_id\": \"$REVENUE_FEES\", \"debit_amount\": 0, \"credit_amount\": 50.00, \"description\": \"Fee revenue\"}
+            ]" "$idempotency_key"
+        ) &
+        pids+=($!)
+    done
+    
+    # Wait for all background processes
+    for pid in "${pids[@]}"; do
+        wait "$pid"
+    done
+    
+    # Verify balances changed by exactly 50 (only one transaction should have been processed)
+    local final_cash=$(get_balance "$ASSET_CASH")
+    local final_revenue=$(get_balance "$REVENUE_FEES")
+    
+    local cash_diff=$(awk "BEGIN { print $final_cash - $initial_cash }")
+    local revenue_diff=$(awk "BEGIN { print $final_revenue - $initial_revenue }")
+    
+    echo "Cash change: $cash_diff (expected: 50.00)"
+    echo "Revenue change: $revenue_diff (expected: -50.00)"
+    
+    local cash_correct=$(awk "BEGIN { print ($cash_diff == 50.00) ? 1 : 0 }")
+    local revenue_correct=$(awk "BEGIN { print ($revenue_diff == -50.00) ? 1 : 0 }")
+    
+    if [[ "$cash_correct" -eq 1 && "$revenue_correct" -eq 1 ]]; then
+        return 0
+    else
+        echo "Concurrent idempotency failed: balances changed incorrectly"
+        return 1
+    fi
+}
+
+test_idempotency_different_keys() {
+    local key1=$(generate_idempotency_key "DIFF_KEYS" "005A")
+    local key2=$(generate_idempotency_key "DIFF_KEYS" "005B")
+    
+    echo "Testing different idempotency keys allow different transactions"
+    
+    # Record initial balances
+    local initial_cash=$(get_balance "$ASSET_CASH")
+    
+    # First transaction
+    record_journal_entry "First transaction" "TEST-005A" "[
+        {\"account_id\": \"$ASSET_CASH\", \"debit_amount\": 25.00, \"credit_amount\": 0, \"description\": \"Cash increase\"},
+        {\"account_id\": \"$REVENUE_FEES\", \"debit_amount\": 0, \"credit_amount\": 25.00, \"description\": \"Fee revenue\"}
+    ]" "$key1" || return 1
+    
+    # Second transaction with different key but same content
+    record_journal_entry "Second transaction" "TEST-005B" "[
+        {\"account_id\": \"$ASSET_CASH\", \"debit_amount\": 25.00, \"credit_amount\": 0, \"description\": \"Cash increase\"},
+        {\"account_id\": \"$REVENUE_FEES\", \"debit_amount\": 0, \"credit_amount\": 25.00, \"description\": \"Fee revenue\"}
+    ]" "$key2" || return 1
+    
+    # Verify both transactions were processed
+    local final_cash=$(get_balance "$ASSET_CASH")
+    local cash_diff=$(awk "BEGIN { print $final_cash - $initial_cash }")
+    
+    echo "Cash change: $cash_diff (expected: 50.00)"
+    
+    local correct=$(awk "BEGIN { print ($cash_diff == 50.00) ? 1 : 0 }")
+    
+    if [[ "$correct" -eq 1 ]]; then
+        return 0
+    else
+        echo "Different keys test failed: expected 50.00 change, got $cash_diff"
+        return 1
+    fi
 }
 
 test_accounting_equation() {
@@ -338,9 +495,23 @@ echo "======================================"
 # Run tests using dedicated test functions
 run_test "Double-Entry Balance Validation" "test_double_entry"
 run_test "Zero-Sum Transaction Validation" "test_zero_sum"
+
+echo -e "${YELLOW}🔒 IDEMPOTENCY TESTS${NC}"
+echo "===================="
+
+run_test "Basic Idempotency (Same Key = Same Result)" "test_idempotency_basic"
+run_test "Concurrent Idempotency (Race Condition Handling)" "test_idempotency_concurrent"
+run_test "Different Keys Allow Different Transactions" "test_idempotency_different_keys"
+
+echo -e "${YELLOW}🔍 SYSTEM INTEGRITY TESTS${NC}"
+echo "========================="
+
 run_test "Accounting Equation (Assets = Liabilities + Equity)" "test_accounting_equation"
 run_test "Direct Database Balance Verification" "test_database_consistency"
 run_test "Global Balance Consistency Check" "test_global_balance"
+
+# Clean up temporary files
+rm -f /tmp/last_entry_id_*
 
 echo ""
 echo "🏆 FINAL RESULTS"
@@ -351,9 +522,11 @@ echo -e "${RED}Failed: $FAILED_TESTS${NC}"
 
 if [[ $FAILED_TESTS -eq 0 ]]; then
     echo ""
-    echo -e "${GREEN}🎉 ALL CORE TESTS PASSED!${NC}"
+    echo -e "${GREEN}🎉 ALL TESTS PASSED!${NC}"
     echo "✅ Double-entry accounting principles verified"
     echo "✅ Transaction integrity confirmed"
+    echo "✅ Idempotency handling verified"
+    echo "✅ Concurrent transaction safety confirmed"
     echo "✅ Database and API consistency verified"
     echo "✅ Global balance equation maintained"
     echo ""
@@ -361,7 +534,7 @@ if [[ $FAILED_TESTS -eq 0 ]]; then
     echo "Ready to build advanced features on this solid foundation!"
 else
     echo ""
-    echo -e "${RED}❌ CORE PLATFORM HAS ISSUES${NC}"
+    echo -e "${RED}❌ PLATFORM HAS ISSUES${NC}"
     echo "Must fix fundamental problems before proceeding with advanced features."
     exit 1
 fi
