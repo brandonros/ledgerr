@@ -1,7 +1,7 @@
 CREATE OR REPLACE FUNCTION ledgerr_api.create_account(
-    p_account_code VARCHAR(10),
+    p_account_code VARCHAR(64),
     p_account_name VARCHAR(100),
-    p_account_type VARCHAR(20),
+    p_account_type VARCHAR(64),
     p_parent_account_id UUID DEFAULT NULL,
     p_account_id UUID DEFAULT NULL
 ) RETURNS UUID AS $$

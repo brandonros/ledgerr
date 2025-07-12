@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS ledgerr.journal_entries (
     is_posted BOOLEAN DEFAULT FALSE,
     
     -- Reversal tracking fields
-    entry_type VARCHAR(20) DEFAULT 'REGULAR' CHECK (entry_type IN ('REGULAR', 'REVERSAL', 'ADJUSTMENT')),
+    entry_type VARCHAR(64) DEFAULT 'REGULAR' CHECK (entry_type IN ('REGULAR', 'REVERSAL', 'ADJUSTMENT')),
     original_entry_id UUID,
     original_entry_date DATE,
     reversed_by_entry_id UUID,
