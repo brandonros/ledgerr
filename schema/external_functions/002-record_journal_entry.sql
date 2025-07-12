@@ -2,11 +2,13 @@ CREATE OR REPLACE FUNCTION ledgerr_api.record_journal_entry(
     p_entry_date DATE,
     p_description TEXT,
     p_journal_lines JSONB,
+    p_idempotency_key VARCHAR(100),
     p_reference_number VARCHAR(50) DEFAULT NULL,
     p_created_by VARCHAR(50) DEFAULT 'system'
 ) RETURNS UUID AS $$
 DECLARE
     v_entry_id UUID;
+    v_existing_entry_id UUID;
     v_total_debits DECIMAL(15,2) := 0;
     v_total_credits DECIMAL(15,2) := 0;
     v_line JSONB;
@@ -20,6 +22,22 @@ BEGIN
     SELECT current_setting('transaction_isolation') INTO v_isolation_level;
     IF v_isolation_level != 'serializable' THEN
         RAISE EXCEPTION 'Payment processing requires SERIALIZABLE isolation level, current level is: %', v_isolation_level;
+    END IF;
+
+    -- Validate required idempotency key
+    IF p_idempotency_key IS NULL OR trim(p_idempotency_key) = '' THEN
+        RAISE EXCEPTION 'Idempotency key is required';
+    END IF;
+
+    -- IDEMPOTENCY CHECK: Look for existing entry with same key on same date
+    SELECT entry_id INTO v_existing_entry_id
+    FROM ledgerr.journal_entries 
+    WHERE idempotency_key = p_idempotency_key 
+    AND entry_date = p_entry_date;
+    
+    IF v_existing_entry_id IS NOT NULL THEN
+        -- Return existing entry ID (idempotent behavior)
+        RETURN v_existing_entry_id;
     END IF;
 
     -- Validate input parameters
@@ -36,8 +54,20 @@ BEGIN
     END IF;
     
     -- Create the journal entry header
-    INSERT INTO ledgerr.journal_entries (entry_date, description, reference_number, created_by)
-    VALUES (p_entry_date, p_description, p_reference_number, p_created_by)
+    INSERT INTO ledgerr.journal_entries (
+        entry_date, 
+        description, 
+        reference_number, 
+        created_by,
+        idempotency_key
+    )
+    VALUES (
+        p_entry_date, 
+        p_description, 
+        p_reference_number, 
+        p_created_by,
+        p_idempotency_key
+    )
     RETURNING entry_id INTO v_entry_id;
     
     -- Process each journal line
@@ -49,7 +79,7 @@ BEGIN
         v_credit_amount := COALESCE((v_line->>'credit_amount')::DECIMAL(15,2), 0);
         v_line_description := v_line->>'description';
         
-        -- Validate account exists - Fixed reference
+        -- Validate account exists
         IF NOT EXISTS (SELECT 1 FROM ledgerr.accounts WHERE account_id = v_account_id AND is_active = TRUE) THEN
             RAISE EXCEPTION 'Account ID % does not exist or is inactive', v_account_id;
         END IF;
@@ -60,15 +90,29 @@ BEGIN
         END IF;
         
         -- Insert journal entry line
-        INSERT INTO ledgerr.journal_entry_lines (entry_id, entry_date, account_id, debit_amount, credit_amount, description)
-        VALUES (v_entry_id, p_entry_date, v_account_id, v_debit_amount, v_credit_amount, v_line_description);
+        INSERT INTO ledgerr.journal_entry_lines (
+            entry_id, 
+            entry_date, 
+            account_id, 
+            debit_amount, 
+            credit_amount, 
+            description
+        )
+        VALUES (
+            v_entry_id, 
+            p_entry_date, 
+            v_account_id, 
+            v_debit_amount, 
+            v_credit_amount, 
+            v_line_description
+        );
         
         -- Add to totals
         v_total_debits := v_total_debits + v_debit_amount;
         v_total_credits := v_total_credits + v_credit_amount;
     END LOOP;
     
-    -- Validate that debits equal credits (fundamental accounting equation)
+    -- Validate that debits equal credits
     IF v_total_debits != v_total_credits THEN
         RAISE EXCEPTION 'Total debits (%) must equal total credits (%) - transaction not balanced', 
                        v_total_debits, v_total_credits;

@@ -9,7 +9,6 @@ CREATE TABLE IF NOT EXISTS ledgerr.journal_entry_lines (
     external_account_id VARCHAR(50),
     payment_id VARCHAR(50),
     payment_type VARCHAR(64) CHECK (payment_type IN ('TRANSFER', 'DEPOSIT', 'WITHDRAWAL', 'FEE')),
-    dempotency_key VARCHAR(50),
     payment_network VARCHAR(64),
     settlement_date DATE,
     external_reference VARCHAR(100),

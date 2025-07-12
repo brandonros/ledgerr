@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS ledgerr.journal_entries (
     created_by VARCHAR(50),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     is_posted BOOLEAN DEFAULT FALSE,
+    idempotency_key VARCHAR(100) NOT NULL,
     
     -- Reversal tracking fields
     entry_type VARCHAR(64) DEFAULT 'REGULAR' CHECK (entry_type IN ('REGULAR', 'REVERSAL', 'ADJUSTMENT')),
@@ -17,6 +18,9 @@ CREATE TABLE IF NOT EXISTS ledgerr.journal_entries (
     is_reversed BOOLEAN DEFAULT FALSE,
 
     PRIMARY KEY (entry_id, entry_date),
+
+    -- Unique constraint must include partition key (entry_date)
+    CONSTRAINT uk_journal_entries_idempotency UNIQUE (idempotency_key, entry_date),
     
     -- Self-referential foreign key for original entry
     CONSTRAINT fk_original_entry 
@@ -29,10 +33,14 @@ CREATE TABLE IF NOT EXISTS ledgerr.journal_entries (
         REFERENCES ledgerr.journal_entries(entry_id, entry_date)
 ) PARTITION BY RANGE (entry_date);
 
+-- Indexes
 CREATE INDEX IF NOT EXISTS idx_journal_entries_date_posted ON ledgerr.journal_entries(entry_date, is_posted);
 CREATE INDEX IF NOT EXISTS idx_journal_entries_posted_date ON ledgerr.journal_entries (entry_date DESC, entry_id) WHERE is_posted = true;
 CREATE INDEX IF NOT EXISTS idx_journal_entries_date_range ON ledgerr.journal_entries(entry_date) WHERE is_posted = TRUE;
 CREATE INDEX IF NOT EXISTS idx_journal_entries_reference ON ledgerr.journal_entries(reference_number);
+
+-- Idempotency index
+CREATE INDEX IF NOT EXISTS idx_journal_entries_idempotency ON ledgerr.journal_entries(idempotency_key);
 
 -- New indexes for reversal tracking
 CREATE INDEX IF NOT EXISTS idx_journal_entries_original ON ledgerr.journal_entries(original_entry_id, original_entry_date);

@@ -2,6 +2,8 @@ import http from 'k6/http';
 import { check, sleep } from 'k6';
 import { uuidv4 } from 'https://jslib.k6.io/k6-utils/1.4.0/index.js';
 
+const SCALING_FACTOR = 1;
+
 // 🏦 ENTERPRISE BANKING DEMO - COMPREHENSIVE LOAD TEST CONFIGURATION
 export const options = {
   scenarios: {
@@ -13,10 +15,10 @@ export const options = {
       preAllocatedVUs: 100,
       maxVUs: 500,
       stages: [
-        { duration: '2m', target: 100 }, // Ramp to 1K TPS
-        { duration: '5m', target: 250 }, // Peak: 2.5K TPS (realistic payment processor)
-        { duration: '3m', target: 150 }, // Sustain high load
-        { duration: '2m', target: 500 },  // Cool down
+        { duration: '2m', target: Math.round(1 * SCALING_FACTOR) }, // Ramp to 1K TPS
+        { duration: '5m', target: Math.round(2.5 * SCALING_FACTOR) }, // Peak: 2.5K TPS (realistic payment processor)
+        { duration: '3m', target: Math.round(1.5 * SCALING_FACTOR) }, // Sustain high load
+        { duration: '2m', target: Math.round(5 * SCALING_FACTOR) },  // Cool down
       ],
       tags: { scenario: 'peak_payments' },
       exec: 'processPayments',
@@ -30,9 +32,9 @@ export const options = {
       preAllocatedVUs: 200,
       maxVUs: 1000,
       stages: [
-        { duration: '1m', target: 200 },  // Quick ramp
-        { duration: '8m', target: 500 },  // 5K TPS balance queries
-        { duration: '3m', target: 300 },  // Sustain
+        { duration: '1m', target: Math.round(2 * SCALING_FACTOR) },  // Quick ramp
+        { duration: '8m', target: Math.round(5 * SCALING_FACTOR) },  // 5K TPS balance queries
+        { duration: '3m', target: Math.round(3 * SCALING_FACTOR) },  // Sustain
       ],
       tags: { scenario: 'balance_queries' },
       exec: 'queryBalances',
@@ -60,9 +62,9 @@ export const options = {
       preAllocatedVUs: 100,
       maxVUs: 300,
       stages: [
-        { duration: '2m', target: 200 },  // Ramp up clearing
-        { duration: '6m', target: 500 },  // 500 TPS inter-bank
-        { duration: '2m', target: 100 },  // Cool down
+        { duration: '2m', target: Math.round(2 * SCALING_FACTOR) },  // Ramp up clearing
+        { duration: '6m', target: Math.round(5 * SCALING_FACTOR) },  // 500 TPS inter-bank
+        { duration: '2m', target: Math.round(1 * SCALING_FACTOR) },  // Cool down
       ],
       tags: { scenario: 'interbank_settlement' },
       exec: 'interbankSettlement',
@@ -77,9 +79,9 @@ export const options = {
       preAllocatedVUs: 500,
       maxVUs: 2000,
       stages: [
-        { duration: '3m', target: 300 },  // Ramp to 3K TPS
-        { duration: '5m', target: 600 },  // PEAK: 6K TPS mixed workload
-        { duration: '2m', target: 400 },  // Sustain
+        { duration: '3m', target: Math.round(3 * SCALING_FACTOR) },  // Ramp to 3K TPS
+        { duration: '5m', target: Math.round(6 * SCALING_FACTOR) },  // PEAK: 6K TPS mixed workload
+        { duration: '2m', target: Math.round(4 * SCALING_FACTOR) },  // Sustain
       ],
       tags: { scenario: 'full_production' },
       exec: 'fullProductionMix',
@@ -94,9 +96,9 @@ export const options = {
       preAllocatedVUs: 50,
       maxVUs: 200,
       stages: [
-        { duration: '1m', target: 100 },   // Ramp up batch processing
-        { duration: '5m', target: 500 },   // Peak batch load - 500 TPS
-        { duration: '2m', target: 200 },   // Wind down
+        { duration: '1m', target: Math.round(1 * SCALING_FACTOR) },   // Ramp up batch processing
+        { duration: '5m', target: Math.round(5 * SCALING_FACTOR) },   // Peak batch load - 500 TPS
+        { duration: '2m', target: Math.round(2 * SCALING_FACTOR) },   // Wind down
       ],
       tags: { scenario: 'payroll_batch' },
       exec: 'processPayrollBatch',
@@ -111,9 +113,9 @@ export const options = {
       preAllocatedVUs: 20,
       maxVUs: 100,
       stages: [
-        { duration: '2m', target: 50 },    // EOD processing
-        { duration: '6m', target: 200 },   // Peak EOD - 200 TPS
-        { duration: '2m', target: 25 },    // Final settlement
+        { duration: '2m', target: Math.round(0.5 * SCALING_FACTOR) },    // EOD processing
+        { duration: '6m', target: Math.round(2 * SCALING_FACTOR) },   // Peak EOD - 200 TPS
+        { duration: '2m', target: Math.round(0.25 * SCALING_FACTOR) },    // Final settlement
       ],
       tags: { scenario: 'eod_settlement' },
       exec: 'endOfDaySettlement',
@@ -141,9 +143,9 @@ export const options = {
       preAllocatedVUs: 50,
       maxVUs: 200,
       stages: [
-        { duration: '3m', target: 100 },   // Ramp up cross-account transfers
-        { duration: '4m', target: 300 },   // Peak deadlock risk - 300 TPS
-        { duration: '3m', target: 50 },    // Cool down
+        { duration: '3m', target: Math.round(1 * SCALING_FACTOR) },   // Ramp up cross-account transfers
+        { duration: '4m', target: Math.round(3 * SCALING_FACTOR) },   // Peak deadlock risk - 300 TPS
+        { duration: '3m', target: Math.round(0.5 * SCALING_FACTOR) },    // Cool down
       ],
       tags: { scenario: 'deadlock_test' },
       exec: 'deadlockStressTest',

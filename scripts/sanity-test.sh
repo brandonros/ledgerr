@@ -134,9 +134,10 @@ get_balance() {
 }
 
 record_journal_entry() {
-    local description="$1"
-    local reference="$2"
-    local lines="$3"
+    local idempotency_key="$1"
+    local description="$2"
+    local reference="$3"
+    local lines="$4"
     
     echo "Recording journal entry: $description"
     
@@ -148,7 +149,8 @@ record_journal_entry() {
             \"p_description\": \"$description\",
             \"p_journal_lines\": $lines,
             \"p_reference_number\": \"$reference\",
-            \"p_created_by\": \"test_suite\"
+            \"p_created_by\": \"test_suite\",
+            \"p_idempotency_key\": \"$idempotency_key\"
         }")
     
     local http_code="${response: -3}"
@@ -190,7 +192,7 @@ assert_balance() {
 # Test functions - these replace the inline eval strings
 test_double_entry() {
     # Record a balanced transaction
-    record_journal_entry 'Test balanced entry' 'TEST-001' "[
+    record_journal_entry 'TEST-001' 'Test balanced entry' 'TEST-001' "[
         {\"account_id\": \"$ASSET_CASH\", \"debit_amount\": 1000.00, \"credit_amount\": 0, \"description\": \"Cash increase\"},
         {\"account_id\": \"$EQUITY_CAPITAL\", \"debit_amount\": 0, \"credit_amount\": 1000.00, \"description\": \"Capital investment\"}
     ]" || return 1
@@ -202,7 +204,7 @@ test_double_entry() {
 }
 
 test_zero_sum() {
-    record_journal_entry 'Complex multi-line entry' 'TEST-002' "[
+    record_journal_entry 'TEST-002' 'Complex multi-line entry' 'TEST-002' "[
         {\"account_id\": \"$ASSET_CASH\", \"debit_amount\": 500.00, \"credit_amount\": 0, \"description\": \"Cash in\"},
         {\"account_id\": \"$ASSET_RECEIVABLE\", \"debit_amount\": 300.00, \"credit_amount\": 0, \"description\": \"Receivable increase\"},
         {\"account_id\": \"$LIABILITY_PAYABLE\", \"debit_amount\": 0, \"credit_amount\": 200.00, \"description\": \"Payable increase\"},
