@@ -521,9 +521,6 @@ run_test "Global Balance Consistency Check" "test_global_balance"
 # Clean up temporary files
 rm -f /tmp/last_entry_id_*
 
-# Run cleanup
-cleanup_test_data
-
 echo ""
 echo "🏆 FINAL RESULTS"
 echo "================"
