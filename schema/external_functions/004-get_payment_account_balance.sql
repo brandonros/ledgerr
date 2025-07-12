@@ -1,4 +1,4 @@
-CREATE OR REPLACE FUNCTION ledgerr.get_payment_account_balance(
+CREATE OR REPLACE FUNCTION ledgerr_api.get_payment_account_balance(
     p_partner_id UUID,
     p_payment_account_id UUID
 ) RETURNS TABLE (
@@ -48,4 +48,4 @@ BEGIN
         v_account_record.balance_version,
         v_account_record.is_active;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER STABLE;

@@ -80,7 +80,7 @@ BEGIN
     FROM ledgerr.payment_accounts WHERE partner_id = v_partner2_id;
     
     -- Execute transfer: $100 from account1 to account2 (REMOVED EXPLICIT TRANSACTION MANAGEMENT)
-    v_entry_id := ledgerr.execute_transaction(
+    v_entry_id := ledgerr_api.execute_transaction(
         v_partner1_id, v_account1_id,
         v_partner2_id, v_account2_id, 
         100.00,
@@ -91,10 +91,10 @@ BEGIN
     
     -- Verify balances using the balance function
     SELECT current_balance INTO v_balance1
-    FROM ledgerr.get_payment_account_balance(v_partner1_id, v_account1_id);
+    FROM ledgerr_api.get_payment_account_balance(v_partner1_id, v_account1_id);
     
     SELECT current_balance INTO v_balance2
-    FROM ledgerr.get_payment_account_balance(v_partner2_id, v_account2_id);
+    FROM ledgerr_api.get_payment_account_balance(v_partner2_id, v_account2_id);
     
     -- Assertions
     IF v_balance1 != 900.00 THEN
@@ -155,10 +155,10 @@ BEGIN
     
     -- Get initial balance
     SELECT current_balance INTO v_initial_balance
-    FROM ledgerr.get_payment_account_balance(v_partner1_id, v_account1_id);
+    FROM ledgerr_api.get_payment_account_balance(v_partner1_id, v_account1_id);
     
     -- Test DEPOSIT transaction (REMOVED EXPLICIT TRANSACTION MANAGEMENT)
-    v_entry_id := ledgerr.execute_transaction(
+    v_entry_id := ledgerr_api.execute_transaction(
         v_bank_partner_id, v_settlement_account_id,
         v_partner1_id, v_account1_id,
         200.00,
@@ -168,7 +168,7 @@ BEGIN
     );
     
     -- Test PURCHASE transaction  
-    v_entry_id := ledgerr.execute_transaction(
+    v_entry_id := ledgerr_api.execute_transaction(
         v_partner1_id, v_account1_id,
         v_bank_partner_id, v_settlement_account_id,
         50.00,
@@ -179,7 +179,7 @@ BEGIN
     
     -- Verify final balance (initial + 200 - 50 = initial + 150)
     SELECT current_balance INTO v_final_balance
-    FROM ledgerr.get_payment_account_balance(v_partner1_id, v_account1_id);
+    FROM ledgerr_api.get_payment_account_balance(v_partner1_id, v_account1_id);
     
     IF v_final_balance != (v_initial_balance + 150.00) THEN
         RAISE EXCEPTION 'TEST 2 FAILED: Balance should be %, got %', 
@@ -237,7 +237,7 @@ BEGIN
     
     -- Try to transfer more than available balance (REMOVED EXPLICIT TRANSACTION MANAGEMENT)
     BEGIN
-        v_entry_id := ledgerr.execute_transaction(
+        v_entry_id := ledgerr_api.execute_transaction(
             v_partner1_id, v_account1_id,
             v_partner2_id, v_account2_id,
             5000.00, -- More than available balance
@@ -261,7 +261,7 @@ BEGIN
     
     -- Verify balance unchanged
     SELECT current_balance INTO v_balance1_after
-    FROM ledgerr.get_payment_account_balance(v_partner1_id, v_account1_id);
+    FROM ledgerr_api.get_payment_account_balance(v_partner1_id, v_account1_id);
     
     IF v_balance1_after != v_balance1_before THEN
         RAISE EXCEPTION 'TEST 3 FAILED: Balance should be unchanged after failed transaction. Before: %, After: %', 
@@ -303,7 +303,7 @@ BEGIN
     FROM ledgerr.payment_accounts WHERE partner_id = v_partner2_id;
     
     -- Execute original transaction (REMOVED EXPLICIT TRANSACTION MANAGEMENT)
-    v_original_entry_id := ledgerr.execute_transaction(
+    v_original_entry_id := ledgerr_api.execute_transaction(
         v_partner1_id, v_account1_id,
         v_partner2_id, v_account2_id,
         75.00,
@@ -322,10 +322,10 @@ BEGIN
     
     -- Verify balances are back to original
     SELECT current_balance INTO v_balance1_after
-    FROM ledgerr.get_payment_account_balance(v_partner1_id, v_account1_id);
+    FROM ledgerr_api.get_payment_account_balance(v_partner1_id, v_account1_id);
     
     SELECT current_balance INTO v_balance2_after  
-    FROM ledgerr.get_payment_account_balance(v_partner2_id, v_account2_id);
+    FROM ledgerr_api.get_payment_account_balance(v_partner2_id, v_account2_id);
     
     IF v_balance1_after != v_balance1_before THEN
         RAISE EXCEPTION 'TEST 4 FAILED: Account 1 balance should be restored to %, got %', 
@@ -371,7 +371,7 @@ BEGIN
     
     -- Test GL balance function
     SELECT * INTO v_balance_record
-    FROM ledgerr.get_gl_account_balance(v_gl_account_id, CURRENT_DATE);
+    FROM ledgerr_api.get_gl_account_balance(v_gl_account_id, CURRENT_DATE);
     
     -- Basic validation that function returns data
     IF v_balance_record.account_balance IS NULL THEN

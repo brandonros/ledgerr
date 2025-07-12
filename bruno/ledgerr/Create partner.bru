@@ -1,0 +1,19 @@
+meta {
+  name: Create partner
+  type: http
+  seq: 3
+}
+
+post {
+  url: http://localhost:3000/rpc/create_partner
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "p_partner_name": "Acme Financial Services",
+    "p_partner_type": "BUSINESS",
+    "p_external_partner_id": "ACME-001"
+  }
+}

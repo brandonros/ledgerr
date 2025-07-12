@@ -1,4 +1,4 @@
-CREATE OR REPLACE FUNCTION ledgerr.execute_transaction(
+CREATE OR REPLACE FUNCTION ledgerr_api.execute_transaction(
     p_from_partner_id UUID,
     p_from_payment_account_id UUID,
     p_to_partner_id UUID,
@@ -119,4 +119,5 @@ BEGIN
     
     RETURN v_entry_id;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SECURITY DEFINER VOLATILE 
+SET default_transaction_isolation TO 'serializable';

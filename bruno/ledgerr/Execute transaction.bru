@@ -1,0 +1,24 @@
+meta {
+  name: Execute transaction
+  type: http
+  seq: 5
+}
+
+post {
+  url: http://localhost:3000/rpc/execute_transaction
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "p_from_partner_id": "66666666-6666-6666-6666-666666666666",
+    "p_from_payment_account_id": "88888888-8888-8888-8888-888888888888",
+    "p_to_partner_id": "55555555-5555-5555-5555-555555555555",
+    "p_to_payment_account_id": "77777777-7777-7777-7777-777777777777",
+    "p_amount": 100.00,
+    "p_transaction_type": "DEPOSIT",
+    "p_description": "Initial customer deposit",
+    "p_external_reference": "EXT-DEP-001"
+  }
+}

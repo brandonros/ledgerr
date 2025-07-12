@@ -1,4 +1,4 @@
-CREATE OR REPLACE FUNCTION ledgerr.get_gl_account_balance(
+CREATE OR REPLACE FUNCTION ledgerr_api.get_gl_account_balance(
     p_gl_account_id UUID,
     p_as_of_date DATE DEFAULT CURRENT_DATE
 ) RETURNS TABLE (
@@ -22,4 +22,4 @@ BEGIN
       AND jel.entry_date <= p_as_of_date
       AND je.is_posted = true;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SECURITY DEFINER STABLE;
