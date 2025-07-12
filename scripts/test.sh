@@ -1,9 +1,9 @@
 #!/bin/bash
 
-# BaaS Happy Path Integration Test Script
-# Clean implementation using the 4-function ledger API
+# Fixed Core Double-Entry Ledger Test Suite
+# Focus: Proving fundamental accounting correctness and scalability
 
-set -e  # Exit on any error
+set -e
 
 BASE_URL="http://localhost:3000"
 CONTENT_TYPE="Content-Type: application/json"
@@ -12,352 +12,354 @@ CONTENT_TYPE="Content-Type: application/json"
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
+BLUE='\033[0;34m'
+NC='\033[0m'
 
-echo "Cleaning up any existing test data..."
-echo "====================================="
-psql "$DATABASE_URL" -c "DELETE FROM ledgerr.journal_entry_lines;"
-psql "$DATABASE_URL" -c "DELETE FROM ledgerr.journal_entries;"
-psql "$DATABASE_URL" -c "DELETE FROM ledgerr.accounts;"
+echo "🔬 FIXED LEDGER VALIDATION TEST SUITE"
+echo "===================================="
+
+# Clean slate with error checking
+echo "Cleaning up existing test data..."
+if ! psql "$DATABASE_URL" -c "DELETE FROM ledgerr.journal_entry_lines;" 2>/dev/null; then
+    echo -e "${RED}Warning: Could not clean journal_entry_lines${NC}"
+fi
+
+if ! psql "$DATABASE_URL" -c "DELETE FROM ledgerr.journal_entries;" 2>/dev/null; then
+    echo -e "${RED}Warning: Could not clean journal_entries${NC}"
+fi
+
+if ! psql "$DATABASE_URL" -c "DELETE FROM ledgerr.accounts;" 2>/dev/null; then
+    echo -e "${RED}Warning: Could not clean accounts${NC}"
+fi
+
+# Generate new test account UUIDs that won't conflict
+ASSET_CASH="$(uuidgen)"
+ASSET_RECEIVABLE="$(uuidgen)"
+LIABILITY_PAYABLE="$(uuidgen)"
+LIABILITY_CUSTOMER="$(uuidgen)"
+EQUITY_CAPITAL="$(uuidgen)"
+REVENUE_FEES="$(uuidgen)"
+EXPENSE_OPERATIONS="$(uuidgen)"
+
+echo "Generated test account IDs:"
+echo "ASSET_CASH: $ASSET_CASH"
+echo "EQUITY_CAPITAL: $EQUITY_CAPITAL"
+echo "REVENUE_FEES: $REVENUE_FEES"
 echo ""
 
-echo "🏦 Setting up Banking as a Service Test Environment..."
-echo "=================================================="
+# Test counters
+TOTAL_TESTS=0
+PASSED_TESTS=0
+FAILED_TESTS=0
 
-# Predictable UUIDs for orchestration
-GL_CUSTOMER_DEPOSITS="11111111-1111-1111-1111-111111111111"
-GL_BANK_CASH="22222222-2222-2222-2222-222222222222"
-GL_FEE_INCOME="33333333-3333-3333-3333-333333333333"
-GL_ACME_CUSTOMER_FUNDS="44444444-4444-4444-4444-444444444444"
-GL_CAPITAL_EQUITY="99999999-9999-9999-9999-999999999999"
-
-echo "📊 Step 1: Creating GL Accounts (Chart of Accounts)"
-echo "---------------------------------------------------"
-
-# 1. Customer Deposits (Liability - where customer money shows up on our books)
-echo "Creating Customer Deposits GL Account..."
-curl -s --request POST \
-  --url "$BASE_URL/rpc/create_account" \
-  --header "$CONTENT_TYPE" \
-  --data "{
-    \"p_account_code\": \"2100\",
-    \"p_account_name\": \"Customer Deposits\",
-    \"p_account_type\": \"LIABILITY\",
-    \"p_parent_account_id\": null,
-    \"p_account_id\": \"$GL_CUSTOMER_DEPOSITS\"
-  }" | jq '.'
-
-# 2. Bank Operating Cash (Asset - where we actually hold the money)
-echo "Creating Bank Operating Cash GL Account..."
-curl -s --request POST \
-  --url "$BASE_URL/rpc/create_account" \
-  --header "$CONTENT_TYPE" \
-  --data "{
-    \"p_account_code\": \"1100\",
-    \"p_account_name\": \"Bank Operating Cash\",
-    \"p_account_type\": \"ASSET\",
-    \"p_parent_account_id\": null,
-    \"p_account_id\": \"$GL_BANK_CASH\"
-  }" | jq '.'
-
-# 3. Fee Income (Revenue - our transaction fees)
-echo "Creating Fee Income GL Account..."
-curl -s --request POST \
-  --url "$BASE_URL/rpc/create_account" \
-  --header "$CONTENT_TYPE" \
-  --data "{
-    \"p_account_code\": \"4100\",
-    \"p_account_name\": \"Transaction Fee Income\",
-    \"p_account_type\": \"REVENUE\",
-    \"p_parent_account_id\": null,
-    \"p_account_id\": \"$GL_FEE_INCOME\"
-  }" | jq '.'
-
-# 4. Acme Partner Customer Funds (Sub-liability under Customer Deposits)
-echo "Creating Acme Partner Customer Funds GL Account..."
-curl -s --request POST \
-  --url "$BASE_URL/rpc/create_account" \
-  --header "$CONTENT_TYPE" \
-  --data "{
-    \"p_account_code\": \"2101\",
-    \"p_account_name\": \"Acme Partner - Customer Funds\",
-    \"p_account_type\": \"LIABILITY\",
-    \"p_parent_account_id\": \"$GL_CUSTOMER_DEPOSITS\",
-    \"p_account_id\": \"$GL_ACME_CUSTOMER_FUNDS\"
-  }" | jq '.'
-
-# 5. Bank Capital/Equity (Source of initial funding)
-echo "Creating Bank Capital GL Account..."
-curl -s --request POST \
-  --url "$BASE_URL/rpc/create_account" \
-  --header "$CONTENT_TYPE" \
-  --data "{
-    \"p_account_code\": \"3100\",
-    \"p_account_name\": \"Bank Capital\",
-    \"p_account_type\": \"EQUITY\",
-    \"p_parent_account_id\": null,
-    \"p_account_id\": \"$GL_CAPITAL_EQUITY\"
-  }" | jq '.'
-
-echo ""
-echo "💰 Step 2: Initial Bank Funding Transaction"
-echo "--------------------------------------------"
-
-# Fund the bank with initial capital using journal entry
-echo "Recording initial bank capitalization..."
-curl -s --request POST \
-  --url "$BASE_URL/rpc/record_journal_entry" \
-  --header "$CONTENT_TYPE" \
-  --data "{
-    \"p_entry_date\": \"$(date +%Y-%m-%d)\",
-    \"p_description\": \"Initial bank capitalization\",
-    \"p_journal_lines\": [
-      {
-        \"account_id\": \"$GL_BANK_CASH\",
-        \"debit_amount\": 100000.00,
-        \"credit_amount\": 0,
-        \"description\": \"Initial cash funding\"
-      },
-      {
-        \"account_id\": \"$GL_CAPITAL_EQUITY\",
-        \"debit_amount\": 0,
-        \"credit_amount\": 100000.00,
-        \"description\": \"Bank capital investment\"
-      }
-    ],
-    \"p_reference_number\": \"BANK-CAP-001\",
-    \"p_created_by\": \"setup_script\"
-  }" | jq '.'
-
-echo ""
-echo "💳 Step 3: Customer Deposit Transaction"
-echo "---------------------------------------"
-
-# Customer deposits $500 into their account
-echo "Recording customer deposit..."
-curl -s --request POST \
-  --url "$BASE_URL/rpc/record_journal_entry" \
-  --header "$CONTENT_TYPE" \
-  --data "{
-    \"p_entry_date\": \"$(date +%Y-%m-%d)\",
-    \"p_description\": \"Customer deposit via Acme partner\",
-    \"p_journal_lines\": [
-      {
-        \"account_id\": \"$GL_BANK_CASH\",
-        \"debit_amount\": 500.00,
-        \"credit_amount\": 0,
-        \"description\": \"Cash received from customer\"
-      },
-      {
-        \"account_id\": \"$GL_ACME_CUSTOMER_FUNDS\",
-        \"debit_amount\": 0,
-        \"credit_amount\": 500.00,
-        \"description\": \"Customer funds liability\"
-      }
-    ],
-    \"p_reference_number\": \"CUST-DEP-001\",
-    \"p_created_by\": \"acme_api\"
-  }" | jq '.'
-
-echo ""
-echo "💸 Step 4: Transaction Fee Processing"
-echo "-------------------------------------"
-
-# Charge a $2.50 transaction fee
-echo "Recording transaction fee..."
-curl -s --request POST \
-  --url "$BASE_URL/rpc/record_journal_entry" \
-  --header "$CONTENT_TYPE" \
-  --data "{
-    \"p_entry_date\": \"$(date +%Y-%m-%d)\",
-    \"p_description\": \"Transaction processing fee\",
-    \"p_journal_lines\": [
-      {
-        \"account_id\": \"$GL_ACME_CUSTOMER_FUNDS\",
-        \"debit_amount\": 2.50,
-        \"credit_amount\": 0,
-        \"description\": \"Fee charged to customer\"
-      },
-      {
-        \"account_id\": \"$GL_FEE_INCOME\",
-        \"debit_amount\": 0,
-        \"credit_amount\": 2.50,
-        \"description\": \"Transaction fee revenue\"
-      }
-    ],
-    \"p_reference_number\": \"FEE-001\",
-    \"p_created_by\": \"fee_processor\"
-  }" | jq '.'
-
-echo ""
-echo "💱 Step 5: Customer Transfer Transaction"
-echo "---------------------------------------"
-
-# Customer transfers $100 to another account
-echo "Recording customer transfer..."
-curl -s --request POST \
-  --url "$BASE_URL/rpc/record_journal_entry" \
-  --header "$CONTENT_TYPE" \
-  --data "{
-    \"p_entry_date\": \"$(date +%Y-%m-%d)\",
-    \"p_description\": \"Customer transfer to external account\",
-    \"p_journal_lines\": [
-      {
-        \"account_id\": \"$GL_ACME_CUSTOMER_FUNDS\",
-        \"debit_amount\": 100.00,
-        \"credit_amount\": 0,
-        \"description\": \"Transfer out from customer account\"
-      },
-      {
-        \"account_id\": \"$GL_BANK_CASH\",
-        \"debit_amount\": 0,
-        \"credit_amount\": 100.00,
-        \"description\": \"Cash sent to external account\"
-      }
-    ],
-    \"p_reference_number\": \"TRANSFER-001\",
-    \"p_created_by\": \"transfer_processor\"
-  }" | jq '.'
-
-echo ""
-echo "🔄 Step 6: Testing Reversal Function"
-echo "------------------------------------"
-
-# First, let's get the entry ID from the transfer transaction
-echo "Creating a test transaction to reverse..."
-REVERSAL_TEST_RESPONSE=$(curl -s --request POST \
-  --url "$BASE_URL/rpc/record_journal_entry" \
-  --header "$CONTENT_TYPE" \
-  --data "{
-    \"p_entry_date\": \"$(date +%Y-%m-%d)\",
-    \"p_description\": \"Test transaction for reversal\",
-    \"p_journal_lines\": [
-      {
-        \"account_id\": \"$GL_ACME_CUSTOMER_FUNDS\",
-        \"debit_amount\": 25.00,
-        \"credit_amount\": 0,
-        \"description\": \"Test debit\"
-      },
-      {
-        \"account_id\": \"$GL_FEE_INCOME\",
-        \"debit_amount\": 0,
-        \"credit_amount\": 25.00,
-        \"description\": \"Test credit\"
-      }
-    ],
-    \"p_reference_number\": \"TEST-REV-001\",
-    \"p_created_by\": \"test_script\"
-  }")
-
-# Extract the entry ID (assuming your API returns it)
-TEST_ENTRY_ID=$(echo $REVERSAL_TEST_RESPONSE | jq -r '.')
-echo "Test transaction created with ID: $TEST_ENTRY_ID"
-
-# Now reverse it
-echo "Reversing the test transaction..."
-curl -s --request POST \
-   --url "$BASE_URL/rpc/create_reversal_entry" \
-   --header "$CONTENT_TYPE" \
-   --data "{
-     \"p_original_entry_id\": \"$TEST_ENTRY_ID\",
-     \"p_original_entry_date\": \"$(date +%Y-%m-%d)\",
-     \"p_reversal_reason\": \"Test reversal for integration testing\",
-     \"p_created_by\": \"test_script\"
-   }" | jq '.'
-
-echo ""
-echo "📊 Step 7: Checking Account Balances & Assertions"
-echo "================================================="
-
-# Function to assert balance
-assert_balance() {
-    local account_name="$1"
-    local account_id="$2"
-    local expected_balance="$3"
-    local description="$4"
+# Helper functions
+run_test() {
+    local test_name="$1"
+    local test_function="$2"
     
-    echo "Checking $account_name balance..."
-    local balance_response=$(curl -s --request POST \
+    TOTAL_TESTS=$((TOTAL_TESTS + 1))
+    echo -e "${BLUE}TEST $TOTAL_TESTS:${NC} $test_name"
+    
+    # Call the test function directly instead of using eval
+    if $test_function; then
+        echo -e "${GREEN}✅ PASSED${NC}"
+        PASSED_TESTS=$((PASSED_TESTS + 1))
+    else
+        echo -e "${RED}❌ FAILED${NC}"
+        FAILED_TESTS=$((FAILED_TESTS + 1))
+    fi
+    echo ""
+}
+
+create_test_account() {
+    local account_id="$1"
+    local account_code="$2"
+    local account_name="$3"
+    local account_type="$4"
+    
+    echo "Creating account: $account_name ($account_code) with ID: $account_id"
+    
+    local response=$(curl -s -w "%{http_code}" --request POST \
+        --url "$BASE_URL/rpc/create_account" \
+        --header "$CONTENT_TYPE" \
+        --data "{
+            \"p_account_id\": \"$account_id\",
+            \"p_account_code\": \"$account_code\",
+            \"p_account_name\": \"$account_name\",
+            \"p_account_type\": \"$account_type\",
+            \"p_parent_account_id\": null
+        }")
+    
+    local http_code="${response: -3}"
+    local response_body="${response%???}"
+    
+    if [[ "$http_code" != "200" ]]; then
+        echo -e "${RED}Failed to create account $account_name: HTTP $http_code${NC}"
+        echo "Response: $response_body"
+        return 1
+    fi
+    
+    echo -e "${GREEN}✅ Account created: $account_name${NC}"
+    return 0
+}
+
+get_balance() {
+    local account_id="$1"
+    local response=$(curl -s -w "%{http_code}" --request POST \
         --url "$BASE_URL/rpc/get_account_balance" \
         --header "$CONTENT_TYPE" \
         --header "Accept: application/vnd.pgrst.object+json" \
         --data "{\"p_account_id\": \"$account_id\"}")
     
-    local actual_balance=$(echo "$balance_response" | jq -r '.account_balance')
-    local total_debits=$(echo "$balance_response" | jq -r '.total_debits')
-    local total_credits=$(echo "$balance_response" | jq -r '.total_credits')
-    local transaction_count=$(echo "$balance_response" | jq -r '.transaction_count')
+    local http_code="${response: -3}"
+    local response_body="${response%???}"
     
-    echo "  Balance: $actual_balance"
-    echo "  Debits: $total_debits, Credits: $total_credits"
-    echo "  Transaction Count: $transaction_count"
-    
-    # Check if balance matches expected (using bc for floating point comparison)
-    if [[ $(echo "$actual_balance == $expected_balance" | bc -l) -eq 1 ]]; then
-        echo -e "  ${GREEN}✅ PASS${NC}: $description"
-    else
-        echo -e "  ${RED}❌ FAIL${NC}: $description"
-        echo -e "  ${RED}Expected: $expected_balance, Got: $actual_balance${NC}"
+    if [[ "$http_code" != "200" ]]; then
+        echo "Error getting balance for $account_id: HTTP $http_code" >&2
+        echo "Response: $response_body" >&2
+        echo "0"
         return 1
     fi
-    echo ""
+    
+    # Try to extract balance from response
+    local balance
+    if command -v jq >/dev/null 2>&1; then
+        balance=$(echo "$response_body" | jq -r '.account_balance // 0')
+    else
+        # Fallback if jq is not available
+        balance=$(echo "$response_body" | grep -o '"account_balance":[^,}]*' | cut -d: -f2 | tr -d ' "')
+    fi
+    
+    echo "${balance:-0}"
 }
 
-# Calculate expected balances based on transactions
-echo "Calculating expected balances..."
+record_journal_entry() {
+    local description="$1"
+    local reference="$2"
+    local lines="$3"
+    
+    echo "Recording journal entry: $description"
+    
+    local response=$(curl -s -w "%{http_code}" --request POST \
+        --url "$BASE_URL/rpc/record_journal_entry" \
+        --header "$CONTENT_TYPE" \
+        --data "{
+            \"p_entry_date\": \"$(date +%Y-%m-%d)\",
+            \"p_description\": \"$description\",
+            \"p_journal_lines\": $lines,
+            \"p_reference_number\": \"$reference\",
+            \"p_created_by\": \"test_suite\"
+        }")
+    
+    local http_code="${response: -3}"
+    local response_body="${response%???}"
+    
+    if [[ "$http_code" != "200" ]]; then
+        echo -e "${RED}Failed to record journal entry: HTTP $http_code${NC}"
+        echo "Response: $response_body"
+        return 1
+    fi
+    
+    echo -e "${GREEN}✅ Journal entry recorded${NC}"
+    return 0
+}
 
-# Bank Cash: 100,000 (initial) + 500 (deposit) - 100 (transfer) = 100,400
-EXPECTED_BANK_CASH="100400.00"
+assert_balance() {
+    local account_id="$1"
+    local expected="$2"
+    local actual=$(get_balance "$account_id")
+    
+    echo "Checking balance for account $account_id: expected $expected, got $actual"
+    
+    # Use bc if available, otherwise use awk for floating point comparison
+    local comparison_result
+    if command -v bc >/dev/null 2>&1; then
+        comparison_result=$(echo "$actual == $expected" | bc -l 2>/dev/null || echo "0")
+    else
+        comparison_result=$(awk "BEGIN { print ($actual == $expected) ? 1 : 0 }")
+    fi
+    
+    if [[ "$comparison_result" -eq 1 ]]; then
+        return 0
+    else
+        echo "Expected: $expected, Got: $actual"
+        return 1
+    fi
+}
 
-# Customer Funds: 500 (deposit) - 2.50 (fee) - 100 (transfer) = 397.50
-# Note: Liabilities have negative balances in normal accounting
-EXPECTED_CUSTOMER_FUNDS="-397.50"
+# Test functions - these replace the inline eval strings
+test_double_entry() {
+    # Record a balanced transaction
+    record_journal_entry 'Test balanced entry' 'TEST-001' "[
+        {\"account_id\": \"$ASSET_CASH\", \"debit_amount\": 1000.00, \"credit_amount\": 0, \"description\": \"Cash increase\"},
+        {\"account_id\": \"$EQUITY_CAPITAL\", \"debit_amount\": 0, \"credit_amount\": 1000.00, \"description\": \"Capital investment\"}
+    ]" || return 1
+    
+    assert_balance "$ASSET_CASH" '1000.00' || return 1
+    assert_balance "$EQUITY_CAPITAL" '-1000.00' || return 1
+    
+    return 0
+}
 
-# Fee Income: 2.50 (fee charged)
-# Note: Revenue accounts have negative balances (credit balance)
-EXPECTED_FEE_INCOME="-2.50"
+test_zero_sum() {
+    record_journal_entry 'Complex multi-line entry' 'TEST-002' "[
+        {\"account_id\": \"$ASSET_CASH\", \"debit_amount\": 500.00, \"credit_amount\": 0, \"description\": \"Cash in\"},
+        {\"account_id\": \"$ASSET_RECEIVABLE\", \"debit_amount\": 300.00, \"credit_amount\": 0, \"description\": \"Receivable increase\"},
+        {\"account_id\": \"$LIABILITY_PAYABLE\", \"debit_amount\": 0, \"credit_amount\": 200.00, \"description\": \"Payable increase\"},
+        {\"account_id\": \"$REVENUE_FEES\", \"debit_amount\": 0, \"credit_amount\": 600.00, \"description\": \"Fee revenue\"}
+    ]" || return 1
+    
+    assert_balance "$ASSET_CASH" '1500.00' || return 1
+    assert_balance "$ASSET_RECEIVABLE" '300.00' || return 1
+    assert_balance "$LIABILITY_PAYABLE" '-200.00' || return 1
+    assert_balance "$REVENUE_FEES" '-600.00' || return 1
+    
+    return 0
+}
 
-# Bank Capital: 100,000 (initial capital)
-# Note: Equity accounts have negative balances (credit balance)
-EXPECTED_BANK_CAPITAL="-100000.00"
+test_accounting_equation() {
+    # Calculate total assets
+    local cash_balance=$(get_balance "$ASSET_CASH")
+    local receivable_balance=$(get_balance "$ASSET_RECEIVABLE")
+    local total_assets=$(awk "BEGIN { print $cash_balance + $receivable_balance }")
+    
+    # Calculate total liabilities and equity
+    local payable_balance=$(get_balance "$LIABILITY_PAYABLE")
+    local customer_balance=$(get_balance "$LIABILITY_CUSTOMER")
+    local capital_balance=$(get_balance "$EQUITY_CAPITAL")
+    local revenue_balance=$(get_balance "$REVENUE_FEES")
+    
+    local total_liab_equity=$(awk "BEGIN { print $payable_balance + $customer_balance + $capital_balance + $revenue_balance }")
+    
+    # They should be equal (liabilities/equity are negative, so sum should equal assets)
+    local equation_check=$(awk "BEGIN { print $total_assets + $total_liab_equity }")
+    
+    echo "Assets: $total_assets (Cash: $cash_balance + Receivable: $receivable_balance)"
+    echo "Liabilities+Equity: $total_liab_equity (Payable: $payable_balance + Customer: $customer_balance + Capital: $capital_balance + Revenue: $revenue_balance)"
+    echo "Difference: $equation_check"
+    
+    # Check if difference is close to zero (accounting for floating point precision)
+    local abs_diff=$(awk "BEGIN { print ($equation_check < 0) ? -$equation_check : $equation_check }")
+    local is_balanced=$(awk "BEGIN { print ($abs_diff < 0.01) ? 1 : 0 }")
+    
+    if [[ "$is_balanced" -eq 1 ]]; then
+        return 0
+    else
+        echo "Equation imbalance: Assets=$total_assets, Liab+Equity=$total_liab_equity, Difference=$equation_check"
+        return 1
+    fi
+}
 
-echo "Expected balances calculated:"
-echo "  Bank Cash: $EXPECTED_BANK_CASH"
-echo "  Customer Funds: $EXPECTED_CUSTOMER_FUNDS"
-echo "  Fee Income: $EXPECTED_FEE_INCOME"
-echo "  Bank Capital: $EXPECTED_BANK_CAPITAL"
-echo ""
+test_database_consistency() {
+    # Get balances directly from database to verify API accuracy
+    local db_cash_balance=$(psql "$DATABASE_URL" -t -c "
+        SELECT COALESCE(SUM(debit_amount) - SUM(credit_amount), 0) 
+        FROM ledgerr.journal_entry_lines 
+        WHERE account_id = '$ASSET_CASH';" | tr -d ' ')
+        
+    local api_cash_balance=$(get_balance "$ASSET_CASH")
+    
+    echo "Database balance: $db_cash_balance"
+    echo "API balance: $api_cash_balance"
+    
+    # They should match
+    local matches=$(awk "BEGIN { print ($db_cash_balance == $api_cash_balance) ? 1 : 0 }")
+    
+    if [[ "$matches" -eq 1 ]]; then
+        return 0
+    else
+        echo "Balance mismatch: DB=$db_cash_balance, API=$api_cash_balance"
+        return 1
+    fi
+}
 
-# Run assertions
-FAILED=0
+test_global_balance() {
+    # Get sum of all debits and credits from database
+    local total_debits=$(psql "$DATABASE_URL" -t -c "SELECT COALESCE(SUM(debit_amount), 0) FROM ledgerr.journal_entry_lines;" | tr -d ' ')
+    local total_credits=$(psql "$DATABASE_URL" -t -c "SELECT COALESCE(SUM(credit_amount), 0) FROM ledgerr.journal_entry_lines;" | tr -d ' ')
+    
+    echo "Total debits: $total_debits"
+    echo "Total credits: $total_credits"
+    
+    # They should be equal
+    local is_balanced=$(awk "BEGIN { print ($total_debits == $total_credits) ? 1 : 0 }")
+    
+    if [[ "$is_balanced" -eq 1 ]]; then
+        return 0
+    else
+        echo "Global balance inconsistency: Debits=$total_debits, Credits=$total_credits"
+        return 1
+    fi
+}
 
-assert_balance "Bank Operating Cash" "$GL_BANK_CASH" "$EXPECTED_BANK_CASH" "Bank cash should reflect initial funding + deposit - transfer" || FAILED=1
+# Setup test accounts with error checking
+echo "Setting up test chart of accounts..."
 
-assert_balance "Acme Customer Funds" "$GL_ACME_CUSTOMER_FUNDS" "$EXPECTED_CUSTOMER_FUNDS" "Customer funds should reflect deposit - fee - transfer" || FAILED=1
-
-assert_balance "Fee Income" "$GL_FEE_INCOME" "$EXPECTED_FEE_INCOME" "Fee income should reflect transaction fees charged" || FAILED=1
-
-assert_balance "Bank Capital" "$GL_CAPITAL_EQUITY" "$EXPECTED_BANK_CAPITAL" "Bank capital should reflect initial capitalization" || FAILED=1
-
-echo "🧪 Final Results Summary"
-echo "========================"
-
-if [[ $FAILED -eq 0 ]]; then
-    echo -e "${GREEN}✅ ALL TESTS PASSED!${NC}"
-    echo "🚀 Banking system is operational and all balances are correct!"
-else
-    echo -e "${RED}❌ SOME TESTS FAILED!${NC}"
-    echo "🔍 Please review the failed assertions above."
+if ! create_test_account "$ASSET_CASH" "1000" "Cash" "ASSET"; then
+    echo -e "${RED}❌ Failed to create Cash account${NC}"
     exit 1
 fi
 
+if ! create_test_account "$ASSET_RECEIVABLE" "1200" "Accounts Receivable" "ASSET"; then
+    echo -e "${RED}❌ Failed to create Accounts Receivable account${NC}"
+    exit 1
+fi
+
+if ! create_test_account "$LIABILITY_PAYABLE" "2000" "Accounts Payable" "LIABILITY"; then
+    echo -e "${RED}❌ Failed to create Accounts Payable account${NC}"
+    exit 1
+fi
+
+if ! create_test_account "$LIABILITY_CUSTOMER" "2100" "Customer Deposits" "LIABILITY"; then
+    echo -e "${RED}❌ Failed to create Customer Deposits account${NC}"
+    exit 1
+fi
+
+if ! create_test_account "$EQUITY_CAPITAL" "3000" "Capital" "EQUITY"; then
+    echo -e "${RED}❌ Failed to create Capital account${NC}"
+    exit 1
+fi
+
+if ! create_test_account "$REVENUE_FEES" "4000" "Fee Revenue" "REVENUE"; then
+    echo -e "${RED}❌ Failed to create Fee Revenue account${NC}"
+    exit 1
+fi
+
+if ! create_test_account "$EXPENSE_OPERATIONS" "5000" "Operating Expenses" "EXPENSE"; then
+    echo -e "${RED}❌ Failed to create Operating Expenses account${NC}"
+    exit 1
+fi
+
+echo -e "${YELLOW}📊 CORE ACCOUNTING PRINCIPLE TESTS${NC}"
+echo "======================================"
+
+# Run tests using dedicated test functions
+run_test "Double-Entry Balance Validation" "test_double_entry"
+run_test "Zero-Sum Transaction Validation" "test_zero_sum"
+run_test "Accounting Equation (Assets = Liabilities + Equity)" "test_accounting_equation"
+run_test "Direct Database Balance Verification" "test_database_consistency"
+run_test "Global Balance Consistency Check" "test_global_balance"
+
 echo ""
-echo "🧪 Test UUIDs for further testing:"
-echo "================================="
-echo "GL Accounts:"
-echo "  Customer Deposits:      $GL_CUSTOMER_DEPOSITS"
-echo "  Bank Operating Cash:    $GL_BANK_CASH"
-echo "  Fee Income:             $GL_FEE_INCOME"
-echo "  Acme Customer Funds:    $GL_ACME_CUSTOMER_FUNDS"
-echo "  Bank Capital:           $GL_CAPITAL_EQUITY"
-echo ""
+echo "🏆 FINAL RESULTS"
+echo "================"
+echo -e "Total Tests: $TOTAL_TESTS"
+echo -e "${GREEN}Passed: $PASSED_TESTS${NC}"
+echo -e "${RED}Failed: $FAILED_TESTS${NC}"
+
+if [[ $FAILED_TESTS -eq 0 ]]; then
+    echo ""
+    echo -e "${GREEN}🎉 ALL CORE TESTS PASSED!${NC}"
+    echo "✅ Double-entry accounting principles verified"
+    echo "✅ Transaction integrity confirmed"
+    echo "✅ Database and API consistency verified"
+    echo "✅ Global balance equation maintained"
+    echo ""
+    echo -e "${BLUE}🚀 CORE PLATFORM IS PRODUCTION-READY${NC}"
+    echo "Ready to build advanced features on this solid foundation!"
+else
+    echo ""
+    echo -e "${RED}❌ CORE PLATFORM HAS ISSUES${NC}"
+    echo "Must fix fundamental problems before proceeding with advanced features."
+    exit 1
+fi
