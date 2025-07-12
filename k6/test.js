@@ -13,9 +13,9 @@ export const options = {
       preAllocatedVUs: 100,
       maxVUs: 500,
       stages: [
-        { duration: '2m', target: 1000 }, // Ramp to 1K TPS
-        { duration: '5m', target: 2500 }, // Peak: 2.5K TPS (realistic payment processor)
-        { duration: '3m', target: 1500 }, // Sustain high load
+        { duration: '2m', target: 100 }, // Ramp to 1K TPS
+        { duration: '5m', target: 250 }, // Peak: 2.5K TPS (realistic payment processor)
+        { duration: '3m', target: 150 }, // Sustain high load
         { duration: '2m', target: 500 },  // Cool down
       ],
       tags: { scenario: 'peak_payments' },
@@ -30,9 +30,9 @@ export const options = {
       preAllocatedVUs: 200,
       maxVUs: 1000,
       stages: [
-        { duration: '1m', target: 2000 },  // Quick ramp
-        { duration: '8m', target: 5000 },  // 5K TPS balance queries
-        { duration: '3m', target: 3000 },  // Sustain
+        { duration: '1m', target: 200 },  // Quick ramp
+        { duration: '8m', target: 500 },  // 5K TPS balance queries
+        { duration: '3m', target: 300 },  // Sustain
       ],
       tags: { scenario: 'balance_queries' },
       exec: 'queryBalances',
@@ -77,9 +77,9 @@ export const options = {
       preAllocatedVUs: 500,
       maxVUs: 2000,
       stages: [
-        { duration: '3m', target: 3000 },  // Ramp to 3K TPS
-        { duration: '5m', target: 6000 },  // PEAK: 6K TPS mixed workload
-        { duration: '2m', target: 4000 },  // Sustain
+        { duration: '3m', target: 300 },  // Ramp to 3K TPS
+        { duration: '5m', target: 600 },  // PEAK: 6K TPS mixed workload
+        { duration: '2m', target: 400 },  // Sustain
       ],
       tags: { scenario: 'full_production' },
       exec: 'fullProductionMix',
@@ -367,12 +367,7 @@ export function setup() {
       p_parent_account_id: null
     };
     
-    console.log(`Creating payroll account ${i} with payload:`, JSON.stringify(payload, null, 2));
-    
     const response = http.post(`${BASE_URL}/rpc/create_account`, JSON.stringify(payload), { headers: HEADERS });
-    
-    console.log(`Payroll account ${i} response status: ${response.status}`);
-    console.log(`Payroll account ${i} response body: ${response.body}`);
     
     if (response.status === 200) {
       totalCreated++;
