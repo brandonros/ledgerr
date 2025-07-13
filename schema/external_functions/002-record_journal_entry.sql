@@ -17,6 +17,10 @@ DECLARE
     v_credit_amount DECIMAL(15,2);
     v_line_description TEXT;
     v_isolation_level TEXT;
+    v_affected_accounts UUID[];
+    v_current_account UUID;
+    v_account_debits DECIMAL(15,2);
+    v_account_credits DECIMAL(15,2);
 BEGIN
     -- Require SERIALIZABLE isolation
     SELECT current_setting('transaction_isolation') INTO v_isolation_level;
@@ -70,6 +74,9 @@ BEGIN
     )
     RETURNING entry_id INTO v_entry_id;
     
+    -- Initialize array to track affected accounts
+    v_affected_accounts := ARRAY[]::UUID[];
+    
     -- Process each journal line
     FOR v_line IN SELECT * FROM jsonb_array_elements(p_journal_lines)
     LOOP
@@ -110,6 +117,11 @@ BEGIN
         -- Add to totals
         v_total_debits := v_total_debits + v_debit_amount;
         v_total_credits := v_total_credits + v_credit_amount;
+        
+        -- Track affected accounts (avoid duplicates)
+        IF NOT (v_account_id = ANY(v_affected_accounts)) THEN
+            v_affected_accounts := array_append(v_affected_accounts, v_account_id);
+        END IF;
     END LOOP;
     
     -- Validate that debits equal credits
@@ -122,6 +134,27 @@ BEGIN
     UPDATE ledgerr.journal_entries 
     SET is_posted = TRUE 
     WHERE entry_id = v_entry_id AND entry_date = p_entry_date;
+    
+    -- Update account balance cache for all affected accounts using our reusable function
+    FOREACH v_current_account IN ARRAY v_affected_accounts
+    LOOP
+        -- Calculate amounts for this account from the current transaction
+        SELECT 
+            COALESCE(SUM(debit_amount), 0),
+            COALESCE(SUM(credit_amount), 0)
+        INTO v_account_debits, v_account_credits
+        FROM ledgerr.journal_entry_lines 
+        WHERE entry_id = v_entry_id 
+        AND account_id = v_current_account;
+        
+        -- Use our reusable function to update the balance cache
+        PERFORM ledgerr.update_account_balance(
+            p_account_id := v_current_account,
+            p_debit_amount := v_account_debits,
+            p_credit_amount := v_account_credits,
+            p_transaction_date := p_entry_date
+        );
+    END LOOP;
     
     RETURN v_entry_id;
 END;

@@ -2,37 +2,37 @@ import http from 'k6/http';
 import { check } from 'k6';
 import { randomString } from 'https://jslib.k6.io/k6-utils/1.2.0/index.js';
 
-// Test configuration - 2x scaled workload
+const SCALING_FACTOR = 10.0;
+
 export const options = {
   scenarios: {
-    // 70% reads (balance checks) - 140 TPS (doubled from 70)
     balance_reads: {
       executor: 'constant-arrival-rate',
-      rate: 140,
+      rate: Math.round(SCALING_FACTOR * 70),
       timeUnit: '1s',
       duration: '60s',
-      preAllocatedVUs: 20,  // Doubled from 10
-      maxVUs: 40,           // Doubled from 20
+      preAllocatedVUs: Math.round(SCALING_FACTOR * 20),
+      maxVUs: Math.round(SCALING_FACTOR * 40),
       exec: 'getBalance',
     },
-    // 30% writes (transactions) - 60 TPS (doubled from 30)
     transaction_writes: {
       executor: 'constant-arrival-rate',
-      rate: 60,
+      rate: Math.round(SCALING_FACTOR * 30),
       timeUnit: '1s',
       duration: '60s',
-      preAllocatedVUs: 10,  // Doubled from 5
-      maxVUs: 20,           // Doubled from 10
+      preAllocatedVUs: Math.round(SCALING_FACTOR * 10),
+      maxVUs: Math.round(SCALING_FACTOR * 20),
       exec: 'createTransaction',
     },
   },
   thresholds: {
-    http_req_duration: ['p(95)<500'], // 95% of requests under 500ms
-    http_req_failed: ['rate<0.1'],    // Less than 10% failures
+    http_req_duration: ['p(95)<100'],
+    http_req_failed: ['rate<0.1'],
   },
 };
 
-const BASE_URL = 'http://localhost:3000';
+//const BASE_URL = 'http://localhost:3000';
+const BASE_URL = 'http://postgrest.asusrogstrix.local';
 
 // Test accounts (use your actual test account IDs)
 const ACCOUNTS = [
@@ -60,7 +60,7 @@ export function getBalance() {
 
   check(response, {
     'balance check status is 200': (r) => r.status === 200,
-    'balance response time < 200ms': (r) => r.timings.duration < 200,
+    'balance response time < 100ms': (r) => r.timings.duration < 100,
   });
 }
 
@@ -105,7 +105,7 @@ export function createTransaction() {
 
   check(response, {
     'transaction status is 200': (r) => r.status === 200,
-    'transaction response time < 1000ms': (r) => r.timings.duration < 1000,
+    'transaction response time < 100ms': (r) => r.timings.duration < 100,
     'transaction created': (r) => r.body && r.body.length > 0,
   });
 

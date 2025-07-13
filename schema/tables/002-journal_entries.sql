@@ -34,16 +34,28 @@ CREATE TABLE IF NOT EXISTS ledgerr.journal_entries (
 ) PARTITION BY RANGE (entry_date);
 
 -- Indexes
-CREATE INDEX IF NOT EXISTS idx_journal_entries_date_posted ON ledgerr.journal_entries(entry_date, is_posted);
-CREATE INDEX IF NOT EXISTS idx_journal_entries_posted_date ON ledgerr.journal_entries (entry_date DESC, entry_id) WHERE is_posted = true;
-CREATE INDEX IF NOT EXISTS idx_journal_entries_date_range ON ledgerr.journal_entries(entry_date) WHERE is_posted = TRUE;
-CREATE INDEX IF NOT EXISTS idx_journal_entries_reference ON ledgerr.journal_entries(reference_number);
+CREATE INDEX IF NOT EXISTS idx_journal_entries_date_posted
+ON ledgerr.journal_entries(entry_date, is_posted, entry_id)
+WHERE is_posted = true OR is_posted = false;
 
--- Idempotency index
-CREATE INDEX IF NOT EXISTS idx_journal_entries_idempotency ON ledgerr.journal_entries(idempotency_key);
+CREATE INDEX IF NOT EXISTS idx_journal_entries_reference_partial
+ON ledgerr.journal_entries(reference_number, entry_date) 
+WHERE reference_number IS NOT NULL;
 
--- New indexes for reversal tracking
-CREATE INDEX IF NOT EXISTS idx_journal_entries_original ON ledgerr.journal_entries(original_entry_id, original_entry_date);
-CREATE INDEX IF NOT EXISTS idx_journal_entries_reversed_by ON ledgerr.journal_entries(reversed_by_entry_id, reversed_by_entry_date);
-CREATE INDEX IF NOT EXISTS idx_journal_entries_type ON ledgerr.journal_entries(entry_type);
-CREATE INDEX IF NOT EXISTS idx_journal_entries_is_reversed ON ledgerr.journal_entries(is_reversed) WHERE is_reversed = true;
+CREATE INDEX IF NOT EXISTS idx_journal_entries_idempotency 
+ON ledgerr.journal_entries USING hash(idempotency_key);
+
+CREATE INDEX IF NOT EXISTS idx_journal_entries_idempotency_covering
+ON ledgerr.journal_entries(idempotency_key, entry_date) 
+INCLUDE (entry_id, is_posted, description);
+
+CREATE INDEX IF NOT EXISTS idx_accounts_active_lookup
+ON ledgerr.accounts(account_id, is_active) 
+WHERE is_active = true;
+
+CREATE INDEX IF NOT EXISTS idx_journal_entries_posting_update
+ON ledgerr.journal_entries(entry_id, entry_date, is_posted);
+
+CREATE INDEX IF NOT EXISTS idx_journal_entries_posted_optimized
+ON ledgerr.journal_entries(is_posted, entry_date DESC, entry_id) 
+WHERE is_posted = true;

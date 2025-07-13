@@ -24,3 +24,11 @@ CREATE TABLE IF NOT EXISTS ledgerr.journal_entry_lines (
 
 CREATE INDEX IF NOT EXISTS idx_journal_entry_lines_payment_id ON ledgerr.journal_entry_lines(payment_id);
 CREATE INDEX IF NOT EXISTS idx_journal_entry_lines_external_account ON ledgerr.journal_entry_lines(external_account_id);
+
+CREATE INDEX IF NOT EXISTS idx_journal_entry_lines_account_balance
+ON ledgerr.journal_entry_lines(account_id, entry_date DESC) 
+INCLUDE (debit_amount, credit_amount);
+
+CREATE INDEX IF NOT EXISTS idx_journal_entry_lines_join_optimized
+ON ledgerr.journal_entry_lines(entry_id, entry_date, account_id)
+INCLUDE (debit_amount, credit_amount);

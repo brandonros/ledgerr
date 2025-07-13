@@ -55,6 +55,25 @@ BEGIN
         TRUE
     );
     
+    -- Create initial cache record (starts at zero)
+    INSERT INTO ledgerr.account_balances (
+        account_id,
+        current_balance,
+        total_debits,
+        total_credits,
+        transaction_count,
+        last_transaction_date,
+        last_updated
+    ) VALUES (
+        v_account_id,
+        0.00,
+        0.00,
+        0.00,
+        0,
+        NULL,
+        CURRENT_TIMESTAMP
+    );
+    
     RETURN v_account_id;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER VOLATILE;

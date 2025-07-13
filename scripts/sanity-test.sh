@@ -5,7 +5,8 @@
 
 set -e
 
-BASE_URL="http://localhost:3000"
+#BASE_URL="http://localhost:3000"
+BASE_URL="http://postgrest.asusrogstrix.local"
 CONTENT_TYPE="Content-Type: application/json"
 
 # Colors for output
