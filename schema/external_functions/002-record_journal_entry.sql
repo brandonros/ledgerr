@@ -37,6 +37,16 @@ BEGIN
         RAISE EXCEPTION 'Payment processing requires SERIALIZABLE isolation level, current level is: %', v_isolation_level;
     END IF;
 
+    -- Set aggressive timeouts to prevent lock stacking
+    -- Lock timeout: how long to wait for a lock
+    SET lock_timeout = '200ms';
+    
+    -- Statement timeout: maximum time for any single statement
+    SET statement_timeout = '500ms';
+    
+    -- Idle in transaction timeout: prevent hung transactions
+    SET idle_in_transaction_session_timeout = '1s';
+
     -- Validate required idempotency key
     IF p_idempotency_key IS NULL OR trim(p_idempotency_key) = '' THEN
         RAISE EXCEPTION 'Idempotency key is required';
@@ -56,10 +66,19 @@ BEGIN
     END IF;
 
     -- IDEMPOTENCY CHECK: Look for existing entry with same key on same date
-    SELECT entry_id INTO v_existing_entry_id
-    FROM ledgerr.journal_entries 
-    WHERE idempotency_key = p_idempotency_key 
-    AND entry_date = p_entry_date;
+    -- Use NOWAIT to fail fast if this row is locked
+    BEGIN
+        SELECT entry_id INTO v_existing_entry_id
+        FROM ledgerr.journal_entries 
+        WHERE idempotency_key = p_idempotency_key 
+        AND entry_date = p_entry_date
+        FOR UPDATE NOWAIT;
+    EXCEPTION
+        WHEN lock_not_available THEN
+            -- Another transaction is processing this same idempotency key
+            RAISE EXCEPTION 'CONCURRENT_PROCESSING' 
+                USING HINT = 'Another transaction is processing this idempotency key. Please retry.';
+    END;
     
     IF v_existing_entry_id IS NOT NULL THEN
         -- Return existing entry ID (idempotent behavior)
@@ -91,10 +110,20 @@ BEGIN
         -- Access typed fields directly (no JSON extraction needed)
         v_current_account_text := v_line.account_id::TEXT;
         
-        -- Validate account exists
-        IF NOT EXISTS (SELECT 1 FROM ledgerr.accounts WHERE account_id = v_line.account_id AND is_active = TRUE) THEN
-            RAISE EXCEPTION 'Account ID % does not exist or is inactive', v_line.account_id;
-        END IF;
+        -- Validate account exists with NOWAIT to fail fast
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1 FROM ledgerr.accounts 
+                WHERE account_id = v_line.account_id 
+                AND is_active = TRUE
+                FOR SHARE NOWAIT
+            ) THEN
+                RAISE EXCEPTION 'Account ID % does not exist or is inactive', v_line.account_id;
+            END IF;
+        EXCEPTION
+            WHEN lock_not_available THEN
+                RAISE EXCEPTION 'ACCOUNT_LOCKED: Account % is locked by another transaction. Please retry.', v_line.account_id;
+        END;
         
         -- Validate that exactly one of debit or credit is provided
         IF (COALESCE(v_line.debit_amount, 0) > 0 AND COALESCE(v_line.credit_amount, 0) > 0) OR 
@@ -138,11 +167,13 @@ BEGIN
     END IF;
     
     -- Update account balance cache using accumulated data (NO SELECT needed!)
+    -- This is where most contention will occur
     FOR v_current_account_text IN SELECT unnest(akeys(v_account_debits))
     LOOP
         v_current_debit := COALESCE((v_account_debits -> v_current_account_text)::DECIMAL(15,2), 0);
         v_current_credit := COALESCE((v_account_credits -> v_current_account_text)::DECIMAL(15,2), 0);
         
+        -- The balance update function will respect our timeout settings
         PERFORM ledgerr.update_account_balance(
             p_account_id := v_current_account_text::UUID,
             p_debit_amount := v_current_debit,
@@ -152,6 +183,20 @@ BEGIN
     END LOOP;
     
     RETURN v_entry_id;
+    
+EXCEPTION
+    WHEN lock_not_available THEN
+        RAISE EXCEPTION 'LOCK_TIMEOUT' 
+            USING HINT = 'Could not acquire necessary locks within timeout period. Please retry.';
+    WHEN query_canceled THEN
+        RAISE EXCEPTION 'STATEMENT_TIMEOUT' 
+            USING HINT = 'Transaction timed out. Please retry with smaller batch or contact support.';
+    WHEN serialization_failure THEN
+        RAISE EXCEPTION 'SERIALIZATION_CONFLICT' 
+            USING HINT = 'Transaction conflicts with concurrent activity. Please retry.';
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER VOLATILE
-SET default_transaction_isolation TO 'serializable';
+SET default_transaction_isolation TO 'serializable'
+SET lock_timeout TO '200ms'
+SET statement_timeout TO '500ms'
+SET idle_in_transaction_session_timeout TO '1s';

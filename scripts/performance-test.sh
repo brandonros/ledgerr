@@ -1,3 +1,3 @@
 #!/bin/bash
 
-k6 run k6/lightweight.js
+k6 run k6/single.js

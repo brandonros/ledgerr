@@ -140,7 +140,7 @@ record_journal_entry() {
     echo "Recording journal entry: $description (key: $idempotency_key)"
     
     local response=$(curl -s -w "%{http_code}" --request POST \
-        --url "$BASE_URL/rpc/record_journal_entry" \
+        --url "$BASE_URL/rpc/record_journal_entry_with_retries" \
         --header "$CONTENT_TYPE" \
         --data "{
             \"p_entry_date\": \"$(date +%Y-%m-%d)\",

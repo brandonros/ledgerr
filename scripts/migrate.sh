@@ -14,13 +14,13 @@ if [[ "$RESET_DB" == true ]]; then
     echo "Dropping and recreating database 'ledgerr'..."
 
     # Terminate all connections to the database
-    psql -v ON_ERROR_STOP=1 "$BASE_DATABASE_URL" -c "SELECT pg_terminate_backend(pg_stat_activity.pid) FROM pg_stat_activity WHERE pg_stat_activity.datname = 'ledgerr' AND pid <> pg_backend_pid();"
+    psql -v ON_ERROR_STOP=1 --pset pager=off "$BASE_DATABASE_URL" -c "SELECT pg_terminate_backend(pg_stat_activity.pid) FROM pg_stat_activity WHERE pg_stat_activity.datname = 'ledgerr' AND pid <> pg_backend_pid();"
     
     # Drop the database (connecting to postgres)
-    psql -v ON_ERROR_STOP=1 "$BASE_DATABASE_URL" -c "DROP DATABASE IF EXISTS ledgerr;"
+    psql -v ON_ERROR_STOP=1 --pset pager=off "$BASE_DATABASE_URL" -c "DROP DATABASE IF EXISTS ledgerr;"
     
     # Create the database (connecting to postgres)
-    psql -v ON_ERROR_STOP=1 "$BASE_DATABASE_URL" -c "CREATE DATABASE ledgerr;"
+    psql -v ON_ERROR_STOP=1 --pset pager=off "$BASE_DATABASE_URL" -c "CREATE DATABASE ledgerr;"
     
     echo "Database 'ledgerr' has been reset!"
 fi
