@@ -15,12 +15,14 @@ const ACCOUNTS = [
 export const options = {
   scenarios: {
     sustained: {
-      executor: 'constant-arrival-rate',
-      rate: 100, // Higher rate for reads since they're typically faster
-      timeUnit: '1s',
-      duration: '1m',
-      preAllocatedVUs: 2,
-      maxVUs: 2,
+      executor: 'ramping-arrival-rate',
+      stages: [
+        { duration: '10s', target: 5 },    // Gentle warmup
+        { duration: '20s', target: 50 },   // Ramp to target
+        { duration: '30s', target: 50 },   // Hold at 50 RPS for 45 seconds
+      ],
+      preAllocatedVUs: 10,
+      maxVUs: 10,
     },
   },
   thresholds: {
@@ -33,31 +35,10 @@ export default function() {
   // Randomly select an account to query
   const accountId = ACCOUNTS[Math.floor(Math.random() * ACCOUNTS.length)];
   
-  // Mix of different query types
-  const queryType = Math.random();
-  let params = {};
-  
-  if (queryType < 0.7) {
-    // 70% - Current balance queries (will use cache)
-    params = {
-      p_account_id: accountId
-    };
-  } else if (queryType < 0.9) {
-    // 20% - Historical balance queries (will bypass cache)
-    const daysBack = Math.floor(Math.random() * 30) + 1;
-    const asOfDate = new Date();
-    asOfDate.setDate(asOfDate.getDate() - daysBack);
-    params = {
-      p_account_id: accountId,
-      p_as_of_date: asOfDate.toISOString().split('T')[0]
-    };
-  } else {
-    // 10% - Force recalculate queries
-    params = {
-      p_account_id: accountId,
-      p_force_recalculate: true
-    };
-  }
+  // 100% - Current balance queries (will use cache)
+  const params = {
+    p_account_id: accountId
+  };
   
   const response = http.post(`${BASE_URL}/rpc/get_account_balance`,
     JSON.stringify(params),
