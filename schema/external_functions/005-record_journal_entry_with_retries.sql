@@ -13,8 +13,8 @@ DECLARE
     v_error_code TEXT;
     v_error_message TEXT;
     v_error_hint TEXT;
-    v_max_retries INTEGER := 100;
-    v_base_delay_ms INTEGER := 5;
+    v_max_retries INTEGER := 50;
+    v_base_delay_ms INTEGER := 2;
 BEGIN
     WHILE v_attempt <= v_max_retries LOOP
         BEGIN

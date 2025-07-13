@@ -37,16 +37,6 @@ BEGIN
         RAISE EXCEPTION 'Payment processing requires SERIALIZABLE isolation level, current level is: %', v_isolation_level;
     END IF;
 
-    -- Set aggressive timeouts to prevent lock stacking
-    -- Lock timeout: how long to wait for a lock
-    SET lock_timeout = '200ms';
-    
-    -- Statement timeout: maximum time for any single statement
-    SET statement_timeout = '500ms';
-    
-    -- Idle in transaction timeout: prevent hung transactions
-    SET idle_in_transaction_session_timeout = '1s';
-
     -- Validate required idempotency key
     IF p_idempotency_key IS NULL OR trim(p_idempotency_key) = '' THEN
         RAISE EXCEPTION 'Idempotency key is required';
@@ -197,6 +187,6 @@ EXCEPTION
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER VOLATILE
 SET default_transaction_isolation TO 'serializable'
-SET lock_timeout TO '200ms'
-SET statement_timeout TO '500ms'
-SET idle_in_transaction_session_timeout TO '1s';
+SET lock_timeout TO '20ms'
+SET statement_timeout TO '50ms'
+SET idle_in_transaction_session_timeout TO '100ms';
