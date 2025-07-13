@@ -7,21 +7,29 @@ const SCALING_FACTOR = 10.0;
 export const options = {
   scenarios: {
     balance_reads: {
-      executor: 'constant-arrival-rate',
-      rate: Math.round(SCALING_FACTOR * 70),
+      executor: 'ramping-arrival-rate',
+      startRate: 0,
       timeUnit: '1s',
-      duration: '60s',
-      preAllocatedVUs: Math.round(SCALING_FACTOR * 20),
-      maxVUs: Math.round(SCALING_FACTOR * 40),
+      preAllocatedVUs: 30,        // Pre-allocate VUs
+      maxVUs: 100,                // Maximum VUs allowed
+      stages: [
+        { duration: '5s', target: Math.round(SCALING_FACTOR * 35) },   // Ramp up to 50% load
+        { duration: '5s', target: Math.round(SCALING_FACTOR * 70) },   // Ramp up to full load
+        { duration: '50s', target: Math.round(SCALING_FACTOR * 70) },  // Maintain target rate
+      ],
       exec: 'getBalance',
     },
     transaction_writes: {
-      executor: 'constant-arrival-rate',
-      rate: Math.round(SCALING_FACTOR * 30),
+      executor: 'ramping-arrival-rate',
+      startRate: 0,
       timeUnit: '1s',
-      duration: '60s',
-      preAllocatedVUs: Math.round(SCALING_FACTOR * 10),
-      maxVUs: Math.round(SCALING_FACTOR * 20),
+      preAllocatedVUs: 20,        // Pre-allocate VUs
+      maxVUs: 50,                 // Maximum VUs allowed
+      stages: [
+        { duration: '5s', target: Math.round(SCALING_FACTOR * 15) },   // Ramp up to 50% load
+        { duration: '5s', target: Math.round(SCALING_FACTOR * 30) },   // Ramp up to full load
+        { duration: '50s', target: Math.round(SCALING_FACTOR * 30) },  // Maintain target rate
+      ],
       exec: 'createTransaction',
     },
   },
@@ -55,6 +63,7 @@ export function getBalance() {
         'Content-Type': 'application/json',
         'Accept': 'application/vnd.pgrst.object+json',
       },
+      timeout: '10s',
     }
   );
 
@@ -68,7 +77,7 @@ export function getBalance() {
 export function createTransaction() {
   const amount = Math.floor(Math.random() * 1000) + 1; // $1-$1000
   const runId = Date.now();
-  const uniqueKey = `LOAD-${runId}-${randomString(8)}-${__VU}-${__ITER}`;
+  const uniqueKey = `LOAD-${Date.now()}-${Math.random().toString(36).substr(2, 9)}-${__VU}-${__ITER}`;
   
   // Random debit/credit pair
   const debitAccount = ACCOUNTS[0]; // Cash
@@ -100,6 +109,7 @@ export function createTransaction() {
       headers: {
         'Content-Type': 'application/json',
       },
+      timeout: '10s',
     }
   );
 

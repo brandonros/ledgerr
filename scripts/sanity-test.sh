@@ -448,6 +448,10 @@ cleanup_test_data() {
         echo -e "${RED}Warning: Could not clean journal_entries${NC}"
     fi
 
+    if ! psql "$DATABASE_URL" -c "DELETE FROM ledgerr.account_balances;" 2>/dev/null; then
+        echo -e "${RED}Warning: Could not clean account_balances${NC}"
+    fi
+
     if ! psql "$DATABASE_URL" -c "DELETE FROM ledgerr.accounts;" 2>/dev/null; then
         echo -e "${RED}Warning: Could not clean accounts${NC}"
     fi

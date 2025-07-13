@@ -1,4 +1,4 @@
-CREATE TABLE ledgerr.account_balances (
+CREATE TABLE IF NOT EXISTS ledgerr.account_balances (
     account_id UUID NOT NULL REFERENCES ledgerr.accounts(account_id),
     current_balance DECIMAL(15,2) DEFAULT 0.00,
     total_debits DECIMAL(15,2) DEFAULT 0.00,
