@@ -23,16 +23,13 @@ DECLARE
     v_existing_entry_id UUID;
     v_total_debits DECIMAL(15,2) := 0;
     v_total_credits DECIMAL(15,2) := 0;
-    v_line JSONB;
-    v_account_id UUID;
-    v_debit_amount DECIMAL(15,2);
-    v_credit_amount DECIMAL(15,2);
-    v_line_description TEXT;
+    v_line ledgerr_api.journal_line_type;
     v_isolation_level TEXT;
-    v_affected_accounts UUID[];
-    v_current_account UUID;
-    v_account_debits DECIMAL(15,2);
-    v_account_credits DECIMAL(15,2);
+    v_account_debits HSTORE := ''::hstore;
+    v_account_credits HSTORE := ''::hstore;
+    v_current_account_text TEXT;
+    v_current_debit DECIMAL(15,2);
+    v_current_credit DECIMAL(15,2);
 BEGIN
     -- Require SERIALIZABLE isolation
     SELECT current_setting('transaction_isolation') INTO v_isolation_level;
@@ -45,6 +42,19 @@ BEGIN
         RAISE EXCEPTION 'Idempotency key is required';
     END IF;
 
+    -- Validate input parameters
+    IF p_entry_date IS NULL THEN
+        RAISE EXCEPTION 'Entry date cannot be null';
+    END IF;
+    
+    IF p_description IS NULL OR trim(p_description) = '' THEN
+        RAISE EXCEPTION 'Description cannot be empty';
+    END IF;
+    
+    IF array_length(p_journal_lines, 1) < 2 THEN
+        RAISE EXCEPTION 'At least two journal lines are required for double-entry';
+    END IF;
+
     -- IDEMPOTENCY CHECK: Look for existing entry with same key on same date
     SELECT entry_id INTO v_existing_entry_id
     FROM ledgerr.journal_entries 
@@ -55,19 +65,6 @@ BEGIN
         -- Return existing entry ID (idempotent behavior)
         RETURN v_existing_entry_id;
     END IF;
-
-    -- Validate input parameters
-    IF p_entry_date IS NULL THEN
-        RAISE EXCEPTION 'Entry date cannot be null';
-    END IF;
-    
-    IF p_description IS NULL OR trim(p_description) = '' THEN
-        RAISE EXCEPTION 'Description cannot be empty';
-    END IF;
-    
-    IF jsonb_array_length(p_journal_lines) < 2 THEN
-        RAISE EXCEPTION 'At least two journal lines are required for double-entry';
-    END IF;
     
     -- Create the journal entry header
     INSERT INTO ledgerr.journal_entries (
@@ -75,36 +72,33 @@ BEGIN
         description, 
         reference_number, 
         created_by,
-        idempotency_key
+        idempotency_key,
+        is_posted
     )
     VALUES (
         p_entry_date, 
         p_description, 
         p_reference_number, 
         p_created_by,
-        p_idempotency_key
+        p_idempotency_key,
+        TRUE
     )
     RETURNING entry_id INTO v_entry_id;
     
-    -- Initialize array to track affected accounts
-    v_affected_accounts := ARRAY[]::UUID[];
-    
     -- Process each journal line
-    FOR v_line IN SELECT * FROM jsonb_array_elements(p_journal_lines)
+    FOR v_line IN SELECT * FROM unnest(p_journal_lines)
     LOOP
-        -- Extract values from JSON
-        v_account_id := (v_line->>'account_id')::UUID;
-        v_debit_amount := COALESCE((v_line->>'debit_amount')::DECIMAL(15,2), 0);
-        v_credit_amount := COALESCE((v_line->>'credit_amount')::DECIMAL(15,2), 0);
-        v_line_description := v_line->>'description';
+        -- Access typed fields directly (no JSON extraction needed)
+        v_current_account_text := v_line.account_id::TEXT;
         
         -- Validate account exists
-        IF NOT EXISTS (SELECT 1 FROM ledgerr.accounts WHERE account_id = v_account_id AND is_active = TRUE) THEN
-            RAISE EXCEPTION 'Account ID % does not exist or is inactive', v_account_id;
+        IF NOT EXISTS (SELECT 1 FROM ledgerr.accounts WHERE account_id = v_line.account_id AND is_active = TRUE) THEN
+            RAISE EXCEPTION 'Account ID % does not exist or is inactive', v_line.account_id;
         END IF;
         
         -- Validate that exactly one of debit or credit is provided
-        IF (v_debit_amount > 0 AND v_credit_amount > 0) OR (v_debit_amount = 0 AND v_credit_amount = 0) THEN
+        IF (COALESCE(v_line.debit_amount, 0) > 0 AND COALESCE(v_line.credit_amount, 0) > 0) OR 
+           (COALESCE(v_line.debit_amount, 0) = 0 AND COALESCE(v_line.credit_amount, 0) = 0) THEN
             RAISE EXCEPTION 'Each line must have either a debit amount or credit amount, but not both';
         END IF;
         
@@ -120,20 +114,21 @@ BEGIN
         VALUES (
             v_entry_id, 
             p_entry_date, 
-            v_account_id, 
-            v_debit_amount, 
-            v_credit_amount, 
-            v_line_description
+            v_line.account_id, 
+            COALESCE(v_line.debit_amount, 0), 
+            COALESCE(v_line.credit_amount, 0), 
+            v_line.description
         );
         
         -- Add to totals
-        v_total_debits := v_total_debits + v_debit_amount;
-        v_total_credits := v_total_credits + v_credit_amount;
+        v_total_debits := v_total_debits + COALESCE(v_line.debit_amount, 0);
+        v_total_credits := v_total_credits + COALESCE(v_line.credit_amount, 0);
         
-        -- Track affected accounts (avoid duplicates)
-        IF NOT (v_account_id = ANY(v_affected_accounts)) THEN
-            v_affected_accounts := array_append(v_affected_accounts, v_account_id);
-        END IF;
+        -- Accumulate account balances using hstore for O(1) lookups
+        v_account_debits := v_account_debits || 
+            hstore(v_current_account_text, (COALESCE((v_account_debits -> v_current_account_text)::DECIMAL(15,2), 0) + COALESCE(v_line.debit_amount, 0))::TEXT);
+        v_account_credits := v_account_credits || 
+            hstore(v_current_account_text, (COALESCE((v_account_credits -> v_current_account_text)::DECIMAL(15,2), 0) + COALESCE(v_line.credit_amount, 0))::TEXT);
     END LOOP;
     
     -- Validate that debits equal credits
@@ -142,28 +137,16 @@ BEGIN
                        v_total_debits, v_total_credits;
     END IF;
     
-    -- Mark the entry as posted
-    UPDATE ledgerr.journal_entries 
-    SET is_posted = TRUE 
-    WHERE entry_id = v_entry_id AND entry_date = p_entry_date;
-    
-    -- Update account balance cache for all affected accounts using our reusable function
-    FOREACH v_current_account IN ARRAY v_affected_accounts
+    -- Update account balance cache using accumulated data (NO SELECT needed!)
+    FOR v_current_account_text IN SELECT unnest(akeys(v_account_debits))
     LOOP
-        -- Calculate amounts for this account from the current transaction
-        SELECT 
-            COALESCE(SUM(debit_amount), 0),
-            COALESCE(SUM(credit_amount), 0)
-        INTO v_account_debits, v_account_credits
-        FROM ledgerr.journal_entry_lines 
-        WHERE entry_id = v_entry_id 
-        AND account_id = v_current_account;
+        v_current_debit := COALESCE((v_account_debits -> v_current_account_text)::DECIMAL(15,2), 0);
+        v_current_credit := COALESCE((v_account_credits -> v_current_account_text)::DECIMAL(15,2), 0);
         
-        -- Use our reusable function to update the balance cache
         PERFORM ledgerr.update_account_balance(
-            p_account_id := v_current_account,
-            p_debit_amount := v_account_debits,
-            p_credit_amount := v_account_credits,
+            p_account_id := v_current_account_text::UUID,
+            p_debit_amount := v_current_debit,
+            p_credit_amount := v_current_credit,
             p_transaction_date := p_entry_date
         );
     END LOOP;
