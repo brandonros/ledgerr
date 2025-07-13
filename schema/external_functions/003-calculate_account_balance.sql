@@ -1,7 +1,7 @@
 CREATE OR REPLACE FUNCTION ledgerr_api.calculate_account_balance(
     p_account_id UUID,
     p_as_of_date DATE DEFAULT CURRENT_DATE
-) RETURNS ledgerr_api.account_balance_result AS $
+) RETURNS ledgerr_api.account_balance_result AS $$
 DECLARE
     result ledgerr_api.account_balance_result;
 BEGIN
@@ -26,4 +26,4 @@ BEGIN
     
     RETURN result;
 END;
-$ LANGUAGE plpgsql SECURITY DEFINER STABLE;
+$$ LANGUAGE plpgsql SECURITY DEFINER STABLE;
