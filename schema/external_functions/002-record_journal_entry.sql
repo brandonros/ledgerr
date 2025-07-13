@@ -1,7 +1,19 @@
+DO $$
+BEGIN
+    IF to_regtype('ledgerr_api.journal_line_type') IS NULL THEN
+        CREATE TYPE ledgerr_api.journal_line_type AS (
+            account_id UUID,
+            debit_amount DECIMAL(15,2),
+            credit_amount DECIMAL(15,2),
+            description TEXT
+        );
+    END IF;
+END$$;
+
 CREATE OR REPLACE FUNCTION ledgerr_api.record_journal_entry(
     p_entry_date DATE,
     p_description TEXT,
-    p_journal_lines JSONB,
+    p_journal_lines ledgerr_api.journal_line_type[],
     p_idempotency_key VARCHAR(100),
     p_reference_number VARCHAR(50) DEFAULT NULL,
     p_created_by VARCHAR(50) DEFAULT 'system'
