@@ -29,6 +29,7 @@ fi
 DIRECTORIES=(
     "extensions"
     "schemas"
+    "types"
     "tables" 
     "internal_functions"
     "external_functions"
