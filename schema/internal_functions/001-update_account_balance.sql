@@ -7,7 +7,14 @@ CREATE OR REPLACE FUNCTION ledgerr.update_account_balance(
 ) RETURNS VOID AS $$
 DECLARE
     v_net_change DECIMAL(15,2);
+    v_isolation_level TEXT;
 BEGIN
+    -- Require SERIALIZABLE isolation
+    SELECT current_setting('transaction_isolation') INTO v_isolation_level;
+    IF v_isolation_level != 'serializable' THEN
+        RAISE EXCEPTION 'Account balance updates require SERIALIZABLE isolation level, current level is: %', v_isolation_level;
+    END IF;
+
     v_net_change := p_debit_amount - p_credit_amount;
     
     -- Update the cached balance (must exist due to 1:1 relationship)
@@ -26,4 +33,5 @@ BEGIN
         RAISE EXCEPTION 'Account balance cache record not found for account %. This should never happen.', p_account_id;
     END IF;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER VOLATILE;
+$$ LANGUAGE plpgsql SECURITY DEFINER VOLATILE
+SET default_transaction_isolation TO 'serializable';
