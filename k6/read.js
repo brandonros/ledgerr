@@ -17,11 +17,11 @@ export const options = {
     sustained: {
       executor: 'ramping-arrival-rate',
       stages: [
-        { duration: '10s', target: 5 },    // Gentle warmup
-        { duration: '20s', target: 50 },   // Ramp to target
-        { duration: '30s', target: 50 },   // Hold at 50 RPS for 45 seconds
+        { duration: '10s', target: 50 },    // Gentle warmup
+        { duration: '20s', target: 100 },   // Ramp to target
+        { duration: '30s', target: 100 },   // Hold at 50 RPS for 45 seconds
       ],
-      preAllocatedVUs: 10,
+      preAllocatedVUs: 2,
       maxVUs: 10,
     },
   },

@@ -10,11 +10,12 @@ export const options = {
     write: {
       executor: 'ramping-arrival-rate',
       stages: [
-        { duration: '15s', target: 50 },   // Ramp up to 50 RPS over 15 seconds
-        { duration: '45s', target: 50 },   // Hold at 50 RPS for 45 seconds
+        { duration: '15s', target: 10 },
+        { duration: '15s', target: 20 },
+        { duration: '5m', target: 40 },
       ],
       preAllocatedVUs: 2,
-      maxVUs: 2,
+      maxVUs: 10,
     },
   },
   thresholds: {
@@ -51,7 +52,7 @@ export default function() {
     }),
     {
       headers: { 'Content-Type': 'application/json' },
-      timeout: '1s',
+      timeout: '10s',
     }
   );
 

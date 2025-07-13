@@ -187,6 +187,6 @@ EXCEPTION
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER VOLATILE
 SET default_transaction_isolation TO 'serializable'
-SET lock_timeout TO '20ms'
-SET statement_timeout TO '50ms'
-SET idle_in_transaction_session_timeout TO '100ms';
+SET lock_timeout TO '200ms'
+SET statement_timeout TO '500ms'
+SET idle_in_transaction_session_timeout TO '1000ms';
