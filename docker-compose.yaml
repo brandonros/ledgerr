@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  postgrest:
+    image: postgrest/postgrest:v13.0.4
+    ports:
+      - "3000:3000"
+    environment:
+      PGRST_DB_URI: postgres://postgres:Test_Password123!@postgres:5432/ledgerr
+      PGRST_DB_SCHEMAS: ledgerr_api
+      PGRST_DB_ANON_ROLE: postgres
+    restart: unless-stopped
+    deploy:
+      replicas: 2
+
+  postgres:
+    image: postgres:17.5-bookworm
+    container_name: postgres
+    environment:
+      POSTGRES_DB: ledgerr
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: Test_Password123!
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
