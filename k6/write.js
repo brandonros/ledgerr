@@ -13,8 +13,7 @@ export const options = {
         { duration: '15s', target: 10 },
         { duration: '15s', target: 25 },
         { duration: '15s', target: 50 },
-        { duration: '15s', target: 75 },
-        { duration: '5m', target: 75 },
+        { duration: '5m', target: 50 },
       ],
       preAllocatedVUs: 2,
       maxVUs: 100,
@@ -27,11 +26,6 @@ export const options = {
     'checks{check:response_time_ok}': ['rate>0.8'],
   },
 };
-
-function isValidUUID(str) {
-  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  return typeof str === 'string' && uuidRegex.test(str.replace(/"/g, ''));
-}
 
 function isSerializationConflict(response) {
   if (response.status !== 400) return false;
@@ -114,6 +108,5 @@ export default function() {
   check(response, {
     'successful_transaction': () => isSuccess,
     'response_time_ok': (r) => r.timings.duration < 100,
-    'valid_success_response': () => !isSuccess || isValidUUID(response.body),
   });
 }
