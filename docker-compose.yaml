@@ -12,7 +12,7 @@ services:
   postgrest:
     image: postgrest/postgrest:v13.0.4
     environment:
-      PGRST_DB_URI: postgres://postgres:Test_Password123!@postgres:5433/ledgerr
+      PGRST_DB_URI: postgres://postgres:Test_Password123!@pgbouncer:5433/ledgerr
       PGRST_DB_SCHEMAS: ledgerr_api
       PGRST_DB_ANON_ROLE: postgres
       PGRST_DB_POOL: '200'
