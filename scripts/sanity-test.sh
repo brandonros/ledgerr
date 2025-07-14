@@ -623,7 +623,6 @@ cleanup_test_data() {
         psql "$DATABASE_URL" -c "DELETE FROM ledgerr.journal_entries;" 2>/dev/null || echo "Warning: Could not clean journal_entries"
         psql "$DATABASE_URL" -c "DELETE FROM ledgerr.account_balances;" 2>/dev/null || echo "Warning: Could not clean account_balances"
         psql "$DATABASE_URL" -c "DELETE FROM ledgerr.accounts;" 2>/dev/null || echo "Warning: Could not clean accounts"
-        psql "$DATABASE_URL" -c "DELETE FROM ledgerr.audit_log;" 2>/dev/null || echo "Warning: Could not clean audit_log"
     else
         echo "DATABASE_URL not set, skipping database cleanup"
     fi
