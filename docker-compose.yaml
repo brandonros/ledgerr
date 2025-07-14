@@ -36,8 +36,7 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./config/postgresql.conf:/etc/postgresql/postgresql.conf:ro
-    command: -c config_file=/etc/postgresql/postgresql.conf
+      - ./config/postgresql.conf:/docker-entrypoint-initdb.d/postgresql.conf:ro
     deploy:
       resources:
         limits:
