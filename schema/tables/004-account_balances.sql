@@ -9,4 +9,3 @@ CREATE TABLE IF NOT EXISTS ledgerr.account_balances (
     
     PRIMARY KEY (account_id)
 );
-

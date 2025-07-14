@@ -12,19 +12,12 @@ DECLARE
     v_total_debits DECIMAL(15,2) := 0;
     v_total_credits DECIMAL(15,2) := 0;
     v_line ledgerr_api.journal_line_type;
-    v_isolation_level TEXT;
     v_account_debits HSTORE := ''::hstore;
     v_account_credits HSTORE := ''::hstore;
     v_current_account_text TEXT;
     v_current_debit DECIMAL(15,2);
     v_current_credit DECIMAL(15,2);
 BEGIN
-    -- Require SERIALIZABLE isolation
-    SELECT current_setting('transaction_isolation') INTO v_isolation_level;
-    IF v_isolation_level != 'serializable' THEN
-        RAISE EXCEPTION 'Payment processing requires SERIALIZABLE isolation level, current level is: %', v_isolation_level;
-    END IF;
-
     -- Validate required idempotency key
     IF p_idempotency_key IS NULL OR trim(p_idempotency_key) = '' THEN
         RAISE EXCEPTION 'Idempotency key is required';
