@@ -33,7 +33,6 @@ DIRECTORIES=(
     "tables" 
     "internal_functions"
     "external_functions"
-    "triggers"
     "partitions"
 )
 
