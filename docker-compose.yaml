@@ -37,6 +37,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./config/postgresql.conf:/docker-entrypoint-initdb.d/postgresql.conf:ro
+      - ./config/setup-config.sh:/docker-entrypoint-initdb.d/setup-config.sh:ro
     deploy:
       resources:
         limits:
