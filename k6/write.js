@@ -1,7 +1,8 @@
 import http from 'k6/http';
 import { check, sleep } from 'k6';
 
-const BASE_URL = 'http://postgrest.asusrogstrix.local';
+//const BASE_URL = 'http://postgrest.asusrogstrix.local';
+const BASE_URL = 'http://localhost:80';
 const CASH_ACCOUNT = '10000000-0000-0000-0000-000000000000';
 const REVENUE_ACCOUNT = '60000000-0000-0000-0000-000000000000';
 
