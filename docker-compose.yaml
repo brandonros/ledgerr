@@ -37,7 +37,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./config/postgresql.conf:/etc/postgresql/postgresql.conf:ro
-    command: -c config_file=/etc/postgresql.conf
+    command: -c config_file=/etc/postgresql/postgresql.conf
     deploy:
       resources:
         limits:
