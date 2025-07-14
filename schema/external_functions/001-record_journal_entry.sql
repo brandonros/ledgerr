@@ -17,6 +17,7 @@ DECLARE
     v_current_account_text TEXT;
     v_current_debit DECIMAL(15,2);
     v_current_credit DECIMAL(15,2);
+    v_all_account_ids UUID[];
 BEGIN
     -- Validate required idempotency key
     IF p_idempotency_key IS NULL OR trim(p_idempotency_key) = '' THEN
@@ -36,23 +37,22 @@ BEGIN
         RAISE EXCEPTION 'At least two journal lines are required for double-entry';
     END IF;
 
-    -- IDEMPOTENCY CHECK: Look for existing entry with same key on same date
-    -- Use NOWAIT to fail fast if this row is locked
-    BEGIN
-        SELECT entry_id INTO v_existing_entry_id
-        FROM ledgerr.journal_entries 
-        WHERE idempotency_key = p_idempotency_key 
-        AND entry_date = p_entry_date
-        FOR UPDATE NOWAIT;
-    EXCEPTION
-        WHEN lock_not_available THEN
-            -- Another transaction is processing this same idempotency key
-            RAISE EXCEPTION 'CONCURRENT_PROCESSING' 
-                USING HINT = 'Another transaction is processing this idempotency key. Please retry.';
-    END;
-    
+    -- Collect all account IDs from journal lines
+    SELECT array_agg(DISTINCT line.account_id) INTO v_all_account_ids
+    FROM unnest(p_journal_lines) AS line;
+
+    -- Validate that all accounts exist and are active
+    IF (SELECT COUNT(*) FROM ledgerr.accounts 
+        WHERE account_id = ANY(v_all_account_ids) AND is_active = TRUE) != array_length(v_all_account_ids, 1) THEN
+        RAISE EXCEPTION 'One or more accounts are invalid or inactive';
+    END IF;
+
+    -- IDEMPOTENCY CHECK: Look for existing entry with same key on same date and return it if found
+    SELECT entry_id INTO v_existing_entry_id
+    FROM ledgerr.journal_entries 
+    WHERE idempotency_key = p_idempotency_key 
+    AND entry_date = p_entry_date;
     IF v_existing_entry_id IS NOT NULL THEN
-        -- Return existing entry ID (idempotent behavior)
         RETURN v_existing_entry_id;
     END IF;
     
@@ -80,21 +80,6 @@ BEGIN
     LOOP
         -- Access typed fields directly (no JSON extraction needed)
         v_current_account_text := v_line.account_id::TEXT;
-        
-        -- Validate account exists with NOWAIT to fail fast
-        BEGIN
-            IF NOT EXISTS (
-                SELECT 1 FROM ledgerr.accounts 
-                WHERE account_id = v_line.account_id 
-                AND is_active = TRUE
-                FOR SHARE NOWAIT
-            ) THEN
-                RAISE EXCEPTION 'Account ID % does not exist or is inactive', v_line.account_id;
-            END IF;
-        EXCEPTION
-            WHEN lock_not_available THEN
-                RAISE EXCEPTION 'ACCOUNT_LOCKED: Account % is locked by another transaction. Please retry.', v_line.account_id;
-        END;
         
         -- Validate that exactly one of debit or credit is provided
         IF (COALESCE(v_line.debit_amount, 0) > 0 AND COALESCE(v_line.credit_amount, 0) > 0) OR 
