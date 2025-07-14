@@ -67,7 +67,7 @@ export default function() {
     ],
     p_reference_number: `TEST-${__VU}-${__ITER}`,
     p_created_by: 'k6_test',
-    p_idempotency_key: uniqueKey
+    p_idempotency_key: uniqueKey,
   };
   
   // Retry logic for serialization conflicts

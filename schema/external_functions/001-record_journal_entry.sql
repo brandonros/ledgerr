@@ -4,8 +4,7 @@ CREATE OR REPLACE FUNCTION ledgerr_api.record_journal_entry(
     p_journal_lines ledgerr_api.journal_line_type[],
     p_idempotency_key VARCHAR(100),
     p_reference_number VARCHAR(50) DEFAULT NULL,
-    p_created_by VARCHAR(50) DEFAULT 'system',
-    p_update_balances BOOLEAN DEFAULT TRUE
+    p_created_by VARCHAR(50) DEFAULT 'system'
 ) RETURNS UUID AS $$
 DECLARE
     v_entry_id UUID;
@@ -146,21 +145,19 @@ BEGIN
     END IF;
     
     -- Update account balance cache using accumulated data
-    IF p_update_balances THEN
-        FOR v_current_account_text IN SELECT unnest(akeys(v_account_debits))
-        LOOP
-            v_current_debit := COALESCE((v_account_debits -> v_current_account_text)::DECIMAL(15,2), 0);
-            v_current_credit := COALESCE((v_account_credits -> v_current_account_text)::DECIMAL(15,2), 0);
-            
-            -- The balance update function will respect our timeout settings
-            PERFORM ledgerr.update_account_balance(
-                p_account_id := v_current_account_text::UUID,
-                p_debit_amount := v_current_debit,
-                p_credit_amount := v_current_credit,
-                p_transaction_date := p_entry_date
-            );
-        END LOOP;
-    END IF;
+    FOR v_current_account_text IN SELECT unnest(akeys(v_account_debits))
+    LOOP
+        v_current_debit := COALESCE((v_account_debits -> v_current_account_text)::DECIMAL(15,2), 0);
+        v_current_credit := COALESCE((v_account_credits -> v_current_account_text)::DECIMAL(15,2), 0);
+        
+        -- The balance update function will respect our timeout settings
+        PERFORM ledgerr.update_account_balance(
+            p_account_id := v_current_account_text::UUID,
+            p_debit_amount := v_current_debit,
+            p_credit_amount := v_current_credit,
+            p_transaction_date := p_entry_date
+        );
+    END LOOP;
     
     RETURN v_entry_id;
     
