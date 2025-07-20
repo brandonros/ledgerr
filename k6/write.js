@@ -2,7 +2,7 @@ import http from 'k6/http';
 import { check, sleep } from 'k6';
 
 //const BASE_URL = 'http://postgrest.asusrogstrix.local';
-const BASE_URL = 'http://localhost:80';
+const BASE_URL = 'http://localhost:3000';
 const CASH_ACCOUNT = '10000000-0000-0000-0000-000000000000';
 const REVENUE_ACCOUNT = '60000000-0000-0000-0000-000000000000';
 
@@ -14,7 +14,13 @@ export const options = {
         { duration: '15s', target: 10 },
         { duration: '15s', target: 25 },
         { duration: '15s', target: 50 },
-        { duration: '5m', target: 50 },
+        { duration: '15s', target: 75 },
+        { duration: '15s', target: 100 },
+        { duration: '15s', target: 125 },
+        { duration: '15s', target: 150 },
+        { duration: '15s', target: 175 },
+        { duration: '15s', target: 200 },
+        { duration: '5m', target: 200 },
       ],
       preAllocatedVUs: 2,
       maxVUs: 100,
@@ -46,20 +52,18 @@ export default function() {
   const payload = {
     p_entry_date: new Date().toISOString().split('T')[0],
     p_description: `Test transaction ${amount}`,
-    p_journal_lines: [
-      {
-        account_id: CASH_ACCOUNT,
-        debit_amount: amount,
-        credit_amount: 0,
-        description: `Debit ${amount}`
-      },
-      {
-        account_id: REVENUE_ACCOUNT,
-        debit_amount: 0,
-        credit_amount: amount,
-        description: `Credit ${amount}`
-      }
-    ],
+    p_debit_line: {
+      account_id: CASH_ACCOUNT,
+      debit_amount: amount,
+      credit_amount: 0,
+      description: `Debit ${amount}`
+    },
+    p_credit_line: {
+      account_id: REVENUE_ACCOUNT,
+      debit_amount: 0,
+      credit_amount: amount,
+      description: `Credit ${amount}`
+    },
     p_reference_number: `TEST-${__VU}-${__ITER}`,
     p_created_by: 'k6_test',
     p_idempotency_key: uniqueKey,

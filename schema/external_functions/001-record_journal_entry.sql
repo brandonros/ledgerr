@@ -1,7 +1,8 @@
 CREATE OR REPLACE FUNCTION ledgerr_api.record_journal_entry(
     p_entry_date DATE,
     p_description TEXT,
-    p_journal_lines ledgerr_api.journal_line_type[],
+    p_credit_line ledgerr_api.journal_line_type,
+    p_debit_line ledgerr_api.journal_line_type,
     p_idempotency_key VARCHAR(100),
     p_reference_number VARCHAR(50) DEFAULT NULL,
     p_created_by VARCHAR(50) DEFAULT 'system'
@@ -9,15 +10,6 @@ CREATE OR REPLACE FUNCTION ledgerr_api.record_journal_entry(
 DECLARE
     v_entry_id UUID;
     v_existing_entry_id UUID;
-    v_total_debits DECIMAL(15,2) := 0;
-    v_total_credits DECIMAL(15,2) := 0;
-    v_line ledgerr_api.journal_line_type;
-    v_account_debits HSTORE := ''::hstore;
-    v_account_credits HSTORE := ''::hstore;
-    v_current_account_text TEXT;
-    v_current_debit DECIMAL(15,2);
-    v_current_credit DECIMAL(15,2);
-    v_all_account_ids UUID[];
 BEGIN
     -- Validate required idempotency key
     IF p_idempotency_key IS NULL OR trim(p_idempotency_key) = '' THEN
@@ -33,18 +25,41 @@ BEGIN
         RAISE EXCEPTION 'Description cannot be empty';
     END IF;
     
-    IF array_length(p_journal_lines, 1) < 2 THEN
-        RAISE EXCEPTION 'At least two journal lines are required for double-entry';
+    IF p_credit_line IS NULL OR p_debit_line IS NULL THEN
+        RAISE EXCEPTION 'Both credit and debit lines are required';
+    END IF;
+    
+    -- Validate debit line has only debit amount
+    IF p_debit_line.debit_amount IS NULL OR p_debit_line.debit_amount <= 0 THEN
+        RAISE EXCEPTION 'Debit line must have a positive debit amount';
+    END IF;
+    
+    IF p_debit_line.credit_amount IS NOT NULL AND p_debit_line.credit_amount != 0 THEN
+        RAISE EXCEPTION 'Debit line cannot have a credit amount';
+    END IF;
+    
+    -- Validate credit line has only credit amount
+    IF p_credit_line.credit_amount IS NULL OR p_credit_line.credit_amount <= 0 THEN
+        RAISE EXCEPTION 'Credit line must have a positive credit amount';
+    END IF;
+    
+    IF p_credit_line.debit_amount IS NOT NULL AND p_credit_line.debit_amount != 0 THEN
+        RAISE EXCEPTION 'Credit line cannot have a debit amount';
+    END IF;
+    
+    -- Validate amounts balance
+    IF p_debit_line.debit_amount != p_credit_line.credit_amount THEN
+        RAISE EXCEPTION 'Debit amount (%) must equal credit amount (%) - transaction not balanced', 
+                       p_debit_line.debit_amount, p_credit_line.credit_amount;
     END IF;
 
-    -- Collect all account IDs from journal lines
-    SELECT array_agg(DISTINCT line.account_id) INTO v_all_account_ids
-    FROM unnest(p_journal_lines) AS line;
-
-    -- Validate that all accounts exist and are active
-    IF (SELECT COUNT(*) FROM ledgerr.accounts 
-        WHERE account_id = ANY(v_all_account_ids) AND is_active = TRUE) != array_length(v_all_account_ids, 1) THEN
-        RAISE EXCEPTION 'One or more accounts are invalid or inactive';
+    -- Validate that both accounts exist and are active
+    IF NOT EXISTS (SELECT 1 FROM ledgerr.accounts WHERE account_id = p_debit_line.account_id AND is_active = TRUE) THEN
+        RAISE EXCEPTION 'Debit account is invalid or inactive';
+    END IF;
+    
+    IF NOT EXISTS (SELECT 1 FROM ledgerr.accounts WHERE account_id = p_credit_line.account_id AND is_active = TRUE) THEN
+        RAISE EXCEPTION 'Credit account is invalid or inactive';
     END IF;
 
     -- IDEMPOTENCY CHECK: Look for existing entry with same key on same date and return it if found
@@ -75,67 +90,57 @@ BEGIN
     )
     RETURNING entry_id INTO v_entry_id;
     
-    -- Process each journal line
-    FOR v_line IN SELECT * FROM unnest(p_journal_lines)
-    LOOP
-        -- Access typed fields directly (no JSON extraction needed)
-        v_current_account_text := v_line.account_id::TEXT;
-        
-        -- Validate that exactly one of debit or credit is provided
-        IF (COALESCE(v_line.debit_amount, 0) > 0 AND COALESCE(v_line.credit_amount, 0) > 0) OR 
-           (COALESCE(v_line.debit_amount, 0) = 0 AND COALESCE(v_line.credit_amount, 0) = 0) THEN
-            RAISE EXCEPTION 'Each line must have either a debit amount or credit amount, but not both';
-        END IF;
-        
-        -- Insert journal entry line
-        INSERT INTO ledgerr.journal_entry_lines (
-            entry_id, 
-            entry_date, 
-            account_id, 
-            debit_amount, 
-            credit_amount, 
-            description
-        )
-        VALUES (
-            v_entry_id, 
-            p_entry_date, 
-            v_line.account_id, 
-            COALESCE(v_line.debit_amount, 0), 
-            COALESCE(v_line.credit_amount, 0), 
-            v_line.description
-        );
-        
-        -- Add to totals
-        v_total_debits := v_total_debits + COALESCE(v_line.debit_amount, 0);
-        v_total_credits := v_total_credits + COALESCE(v_line.credit_amount, 0);
-        
-        -- Accumulate account balances using hstore for O(1) lookups
-        v_account_debits := v_account_debits || 
-            hstore(v_current_account_text, (COALESCE((v_account_debits -> v_current_account_text)::DECIMAL(15,2), 0) + COALESCE(v_line.debit_amount, 0))::TEXT);
-        v_account_credits := v_account_credits || 
-            hstore(v_current_account_text, (COALESCE((v_account_credits -> v_current_account_text)::DECIMAL(15,2), 0) + COALESCE(v_line.credit_amount, 0))::TEXT);
-    END LOOP;
+    -- Insert debit journal entry line
+    INSERT INTO ledgerr.journal_entry_lines (
+        entry_id, 
+        entry_date, 
+        account_id, 
+        debit_amount, 
+        credit_amount, 
+        description
+    )
+    VALUES (
+        v_entry_id, 
+        p_entry_date, 
+        p_debit_line.account_id, 
+        p_debit_line.debit_amount, 
+        0, 
+        p_debit_line.description
+    );
     
-    -- Validate that debits equal credits
-    IF v_total_debits != v_total_credits THEN
-        RAISE EXCEPTION 'Total debits (%) must equal total credits (%) - transaction not balanced', 
-                       v_total_debits, v_total_credits;
-    END IF;
+    -- Insert credit journal entry line
+    INSERT INTO ledgerr.journal_entry_lines (
+        entry_id, 
+        entry_date, 
+        account_id, 
+        debit_amount, 
+        credit_amount, 
+        description
+    )
+    VALUES (
+        v_entry_id, 
+        p_entry_date, 
+        p_credit_line.account_id, 
+        0, 
+        p_credit_line.credit_amount, 
+        p_credit_line.description
+    );
     
-    -- Update account balance cache using accumulated data
-    FOR v_current_account_text IN SELECT unnest(akeys(v_account_debits))
-    LOOP
-        v_current_debit := COALESCE((v_account_debits -> v_current_account_text)::DECIMAL(15,2), 0);
-        v_current_credit := COALESCE((v_account_credits -> v_current_account_text)::DECIMAL(15,2), 0);
-        
-        -- The balance update function will respect our timeout settings
-        PERFORM ledgerr.update_account_balance(
-            p_account_id := v_current_account_text::UUID,
-            p_debit_amount := v_current_debit,
-            p_credit_amount := v_current_credit,
-            p_transaction_date := p_entry_date
-        );
-    END LOOP;
+    -- Update account balance cache for debit account
+    PERFORM ledgerr.update_account_balance(
+        p_account_id := p_debit_line.account_id,
+        p_debit_amount := p_debit_line.debit_amount,
+        p_credit_amount := 0,
+        p_transaction_date := p_entry_date
+    );
+    
+    -- Update account balance cache for credit account
+    PERFORM ledgerr.update_account_balance(
+        p_account_id := p_credit_line.account_id,
+        p_debit_amount := 0,
+        p_credit_amount := p_credit_line.credit_amount,
+        p_transaction_date := p_entry_date
+    );
     
     RETURN v_entry_id;
     

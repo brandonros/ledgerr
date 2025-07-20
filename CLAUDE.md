@@ -9,7 +9,7 @@ This is a high-performance double-entry bookkeeping system built with PostgreSQL
 ## Core Architecture
 
 ### Database Layer
-- **PostgreSQL** with custom extensions (uuid-ossp, hstore)
+- **PostgreSQL** with custom extensions (uuid-ossp)
 - **Two-schema design**: `ledgerr` (internal) and `ledgerr_api` (public API)
 - **Monthly partitioning** on `entry_date` for scalability
 - **Balance caching** for performance optimization

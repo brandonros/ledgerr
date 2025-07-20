@@ -5,7 +5,7 @@
 
 set -e
 
-BASE_URL="http://localhost:80"
+BASE_URL="http://localhost:3000"
 #BASE_URL="http://postgrest.asusrogstrix.local"
 CONTENT_TYPE="Content-Type: application/json"
 
@@ -135,8 +135,9 @@ get_balance() {
 record_journal_entry() {
     local description="$1"
     local reference="$2"
-    local lines="$3"
-    local idempotency_key="$4"
+    local debit_line="$3"
+    local credit_line="$4"
+    local idempotency_key="$5"
     
     echo "Recording journal entry: $description (key: $idempotency_key)"
     
@@ -146,7 +147,8 @@ record_journal_entry() {
         --data "{
             \"p_entry_date\": \"$(date +%Y-%m-%d)\",
             \"p_description\": \"$description\",
-            \"p_journal_lines\": $lines,
+            \"p_debit_line\": $debit_line,
+            \"p_credit_line\": $credit_line,
             \"p_reference_number\": \"$reference\",
             \"p_created_by\": \"test_suite\",
             \"p_idempotency_key\": \"$idempotency_key\"
@@ -179,9 +181,10 @@ record_journal_entry() {
 record_journal_entry_with_error_capture() {
     local description="$1"
     local reference="$2"
-    local lines="$3"
-    local idempotency_key="$4"
-    local worker_id="$5"
+    local debit_line="$3"
+    local credit_line="$4"
+    local idempotency_key="$5"
+    local worker_id="$6"
     
     local start_time=$(date +%s)
     local response=$(curl -s -w "%{http_code}" --request POST \
@@ -190,7 +193,8 @@ record_journal_entry_with_error_capture() {
         --data "{
             \"p_entry_date\": \"$(date +%Y-%m-%d)\",
             \"p_description\": \"$description\",
-            \"p_journal_lines\": $lines,
+            \"p_debit_line\": $debit_line,
+            \"p_credit_line\": $credit_line,
             \"p_reference_number\": \"$reference\",
             \"p_created_by\": \"test_suite_worker_${worker_id}\",
             \"p_idempotency_key\": \"$idempotency_key\"
@@ -222,20 +226,21 @@ record_journal_entry_with_error_capture() {
 record_journal_entry_with_retry() {
     local description="$1"
     local reference="$2"
-    local lines="$3"
-    local idempotency_key="$4"
+    local debit_line="$3"
+    local credit_line="$4"
+    local idempotency_key="$5"
     
     echo "Testing idempotency: Recording entry twice with same key"
     
     # First call
-    if ! record_journal_entry "$description" "$reference" "$lines" "$idempotency_key"; then
+    if ! record_journal_entry "$description" "$reference" "$debit_line" "$credit_line" "$idempotency_key"; then
         return 1
     fi
     
     local first_entry_id=$(cat "/tmp/last_entry_id_${idempotency_key}")
     
     # Second call with same idempotency key - should return same entry ID
-    if ! record_journal_entry "$description (retry)" "$reference" "$lines" "$idempotency_key"; then
+    if ! record_journal_entry "$description (retry)" "$reference" "$debit_line" "$credit_line" "$idempotency_key"; then
         return 1
     fi
     
@@ -278,10 +283,10 @@ test_double_entry() {
     local idempotency_key=$(generate_idempotency_key "DOUBLE_ENTRY" "001")
     
     # Record a balanced transaction
-    record_journal_entry 'Test balanced entry' 'TEST-001' "[
-        {\"account_id\": \"$ASSET_CASH\", \"debit_amount\": 1000.00, \"credit_amount\": 0, \"description\": \"Cash increase\"},
-        {\"account_id\": \"$EQUITY_CAPITAL\", \"debit_amount\": 0, \"credit_amount\": 1000.00, \"description\": \"Capital investment\"}
-    ]" "$idempotency_key" || return 1
+    local debit_line="{\"account_id\": \"$ASSET_CASH\", \"debit_amount\": 1000.00, \"credit_amount\": null, \"description\": \"Cash increase\"}"
+    local credit_line="{\"account_id\": \"$EQUITY_CAPITAL\", \"debit_amount\": null, \"credit_amount\": 1000.00, \"description\": \"Capital investment\"}"
+    
+    record_journal_entry 'Test balanced entry' 'TEST-001' "$debit_line" "$credit_line" "$idempotency_key" || return 1
     
     assert_balance "$ASSET_CASH" '1000.00' || return 1
     assert_balance "$EQUITY_CAPITAL" '-1000.00' || return 1
@@ -290,19 +295,30 @@ test_double_entry() {
 }
 
 test_zero_sum() {
-    local idempotency_key=$(generate_idempotency_key "ZERO_SUM" "002")
+    local idempotency_key1=$(generate_idempotency_key "ZERO_SUM" "002A")
+    local idempotency_key2=$(generate_idempotency_key "ZERO_SUM" "002B")
+    local idempotency_key3=$(generate_idempotency_key "ZERO_SUM" "002C")
     
-    record_journal_entry 'Complex multi-line entry' 'TEST-002' "[
-        {\"account_id\": \"$ASSET_CASH\", \"debit_amount\": 500.00, \"credit_amount\": 0, \"description\": \"Cash in\"},
-        {\"account_id\": \"$ASSET_RECEIVABLE\", \"debit_amount\": 300.00, \"credit_amount\": 0, \"description\": \"Receivable increase\"},
-        {\"account_id\": \"$LIABILITY_PAYABLE\", \"debit_amount\": 0, \"credit_amount\": 200.00, \"description\": \"Payable increase\"},
-        {\"account_id\": \"$REVENUE_FEES\", \"debit_amount\": 0, \"credit_amount\": 600.00, \"description\": \"Fee revenue\"}
-    ]" "$idempotency_key" || return 1
+    # Split the complex multi-line entry into multiple balanced transactions
+    # Transaction 1: Cash + Revenue (500)
+    local debit_line1="{\"account_id\": \"$ASSET_CASH\", \"debit_amount\": 500.00, \"credit_amount\": null, \"description\": \"Cash in\"}"
+    local credit_line1="{\"account_id\": \"$REVENUE_FEES\", \"debit_amount\": null, \"credit_amount\": 500.00, \"description\": \"Fee revenue\"}"
+    record_journal_entry 'Cash from revenue' 'TEST-002A' "$debit_line1" "$credit_line1" "$idempotency_key1" || return 1
     
-    assert_balance "$ASSET_CASH" '1500.00' || return 1
+    # Transaction 2: Receivable + Revenue (300) 
+    local debit_line2="{\"account_id\": \"$ASSET_RECEIVABLE\", \"debit_amount\": 300.00, \"credit_amount\": null, \"description\": \"Receivable increase\"}"
+    local credit_line2="{\"account_id\": \"$REVENUE_FEES\", \"debit_amount\": null, \"credit_amount\": 300.00, \"description\": \"Fee revenue\"}"
+    record_journal_entry 'Receivable from revenue' 'TEST-002B' "$debit_line2" "$credit_line2" "$idempotency_key2" || return 1
+    
+    # Transaction 3: Cash decrease and Payable increase (200)
+    local debit_line3="{\"account_id\": \"$ASSET_CASH\", \"debit_amount\": 200.00, \"credit_amount\": null, \"description\": \"Cash payment\"}"
+    local credit_line3="{\"account_id\": \"$LIABILITY_PAYABLE\", \"debit_amount\": null, \"credit_amount\": 200.00, \"description\": \"Payable increase\"}"
+    record_journal_entry 'Payable from cash' 'TEST-002C' "$debit_line3" "$credit_line3" "$idempotency_key3" || return 1
+    
+    assert_balance "$ASSET_CASH" '1700.00' || return 1  # 1000 + 500 + 200
     assert_balance "$ASSET_RECEIVABLE" '300.00' || return 1
     assert_balance "$LIABILITY_PAYABLE" '-200.00' || return 1
-    assert_balance "$REVENUE_FEES" '-600.00' || return 1
+    assert_balance "$REVENUE_FEES" '-800.00' || return 1  # -500 - 300
     
     return 0
 }
@@ -311,14 +327,14 @@ test_idempotency_basic() {
     local idempotency_key=$(generate_idempotency_key "IDEMPOTENCY_BASIC" "003")
     
     # Test idempotency with a simple transaction
-    record_journal_entry_with_retry 'Idempotency test transaction' 'TEST-003' "[
-        {\"account_id\": \"$ASSET_CASH\", \"debit_amount\": 100.00, \"credit_amount\": 0, \"description\": \"Cash increase\"},
-        {\"account_id\": \"$REVENUE_FEES\", \"debit_amount\": 0, \"credit_amount\": 100.00, \"description\": \"Fee revenue\"}
-    ]" "$idempotency_key" || return 1
+    local debit_line="{\"account_id\": \"$ASSET_CASH\", \"debit_amount\": 100.00, \"credit_amount\": null, \"description\": \"Cash increase\"}"
+    local credit_line="{\"account_id\": \"$REVENUE_FEES\", \"debit_amount\": null, \"credit_amount\": 100.00, \"description\": \"Fee revenue\"}"
+    
+    record_journal_entry_with_retry 'Idempotency test transaction' 'TEST-003' "$debit_line" "$credit_line" "$idempotency_key" || return 1
     
     # Verify balances are correct (should only be applied once)
-    assert_balance "$ASSET_CASH" '1600.00' || return 1  # Previous balance + 100
-    assert_balance "$REVENUE_FEES" '-700.00' || return 1  # Previous balance - 100
+    assert_balance "$ASSET_CASH" '1800.00' || return 1  # Previous balance + 100 (1700 + 100)
+    assert_balance "$REVENUE_FEES" '-900.00' || return 1  # Previous balance - 100 (-800 - 100)
     
     return 0
 }
@@ -336,10 +352,9 @@ test_idempotency_concurrent() {
     local pids=()
     for i in {1..3}; do
         (
-            record_journal_entry "Concurrent test transaction $i" "TEST-004-$i" "[
-                {\"account_id\": \"$ASSET_CASH\", \"debit_amount\": 50.00, \"credit_amount\": 0, \"description\": \"Cash increase\"},
-                {\"account_id\": \"$REVENUE_FEES\", \"debit_amount\": 0, \"credit_amount\": 50.00, \"description\": \"Fee revenue\"}
-            ]" "$idempotency_key"
+            local debit_line="{\"account_id\": \"$ASSET_CASH\", \"debit_amount\": 50.00, \"credit_amount\": null, \"description\": \"Cash increase\"}"
+            local credit_line="{\"account_id\": \"$REVENUE_FEES\", \"debit_amount\": null, \"credit_amount\": 50.00, \"description\": \"Fee revenue\"}"
+            record_journal_entry "Concurrent test transaction $i" "TEST-004-$i" "$debit_line" "$credit_line" "$idempotency_key"
         ) &
         pids+=($!)
     done
@@ -380,16 +395,12 @@ test_idempotency_different_keys() {
     local initial_cash=$(get_balance "$ASSET_CASH")
     
     # First transaction
-    record_journal_entry "First transaction" "TEST-005A" "[
-        {\"account_id\": \"$ASSET_CASH\", \"debit_amount\": 25.00, \"credit_amount\": 0, \"description\": \"Cash increase\"},
-        {\"account_id\": \"$REVENUE_FEES\", \"debit_amount\": 0, \"credit_amount\": 25.00, \"description\": \"Fee revenue\"}
-    ]" "$key1" || return 1
+    local debit_line="{\"account_id\": \"$ASSET_CASH\", \"debit_amount\": 25.00, \"credit_amount\": null, \"description\": \"Cash increase\"}"
+    local credit_line="{\"account_id\": \"$REVENUE_FEES\", \"debit_amount\": null, \"credit_amount\": 25.00, \"description\": \"Fee revenue\"}"
+    record_journal_entry "First transaction" "TEST-005A" "$debit_line" "$credit_line" "$key1" || return 1
     
     # Second transaction with different key but same content
-    record_journal_entry "Second transaction" "TEST-005B" "[
-        {\"account_id\": \"$ASSET_CASH\", \"debit_amount\": 25.00, \"credit_amount\": 0, \"description\": \"Cash increase\"},
-        {\"account_id\": \"$REVENUE_FEES\", \"debit_amount\": 0, \"credit_amount\": 25.00, \"description\": \"Fee revenue\"}
-    ]" "$key2" || return 1
+    record_journal_entry "Second transaction" "TEST-005B" "$debit_line" "$credit_line" "$key2" || return 1
     
     # Verify both transactions were processed
     local final_cash=$(get_balance "$ASSET_CASH")
@@ -437,13 +448,13 @@ test_high_contention_stress() {
     for i in $(seq 1 $NUM_WORKERS); do
         local worker_key=$(generate_idempotency_key "STRESS_WORKER" $(printf "%03d" $i))
         (
+            local debit_line="{\"account_id\": \"$REVENUE_FEES\", \"debit_amount\": $TRANSACTION_AMOUNT, \"credit_amount\": null, \"description\": \"Revenue increase\"}"
+            local credit_line="{\"account_id\": \"$ASSET_CASH\", \"debit_amount\": null, \"credit_amount\": $TRANSACTION_AMOUNT, \"description\": \"Cash decrease\"}"
             record_journal_entry_with_error_capture \
                 "Stress test transaction $i" \
                 "STRESS-$(printf "%03d" $i)" \
-                "[
-                    {\"account_id\": \"$ASSET_CASH\", \"debit_amount\": 0, \"credit_amount\": $TRANSACTION_AMOUNT, \"description\": \"Cash decrease\"},
-                    {\"account_id\": \"$REVENUE_FEES\", \"debit_amount\": $TRANSACTION_AMOUNT, \"credit_amount\": 0, \"description\": \"Revenue increase\"}
-                ]" \
+                "$debit_line" \
+                "$credit_line" \
                 "$worker_key" \
                 "$i"
         ) &
