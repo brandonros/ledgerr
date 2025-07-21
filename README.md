@@ -7,7 +7,7 @@ Proof-of-concept double-entry bookkeeping system
 export DATABASE_URL="psql://..."
 ./scripts/migrate.sh
 ./scripts/run-postgrest.sh # launch postgrest api at http://localhost:3000
-./scripts/sanity-test.sh # preseed database
+./scripts/sanity-test.sh postgres # preseed
 k6 run k6/write.js # performance test
 ```
 
@@ -16,6 +16,6 @@ k6 run k6/write.js # performance test
 ```shell
 ./scripts/run-tigerbeetle.sh # launch tigerbeetle cluster at http://localhost:5000
 ./scripts/run-dotnet.sh # launch tigerbeetle api at http://localhost:3000
-./scripts/sanity-test.sh # preseed
+./scripts/sanity-test.sh tigerbeetle # preseed
 k6 run k6/write.js # performance test
 ```

@@ -5,6 +5,20 @@
 
 set -e
 
+# Check for parameter
+if [ $# -eq 0 ]; then
+    echo "Usage: $0 [postgres|tigerbeetle]"
+    exit 1
+fi
+
+BACKEND="$1"
+if [[ "$BACKEND" != "postgres" && "$BACKEND" != "tigerbeetle" ]]; then
+    echo "Error: Backend must be either 'postgres' or 'tigerbeetle'"
+    exit 1
+fi
+
+echo "Running tests for backend: $BACKEND"
+
 BASE_URL="http://localhost:3000"
 #BASE_URL="http://postgrest.asusrogstrix.local"
 CONTENT_TYPE="Content-Type: application/json"
@@ -640,7 +654,9 @@ cleanup_test_data() {
 }
 
 # Run cleanup
-cleanup_test_data
+if [[ "$BACKEND" == "postgres" ]]; then
+    cleanup_test_data
+fi
 
 # Setup test accounts with error checking
 echo "Setting up test chart of accounts..."
@@ -703,7 +719,11 @@ echo -e "${YELLOW}🔍 SYSTEM INTEGRITY TESTS${NC}"
 echo "========================="
 
 run_test "Accounting Equation (Assets = Liabilities + Equity)" "test_accounting_equation"
-run_test "Direct Database Balance Verification" "test_database_consistency"
+
+if [[ "$BACKEND" == "postgres" ]]; then
+    run_test "Direct Database Balance Verification" "test_database_consistency"
+fi
+
 run_test "Global Balance Consistency Check" "test_global_balance"
 
 # Clean up temporary files
